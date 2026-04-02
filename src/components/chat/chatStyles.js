@@ -274,7 +274,7 @@ export const styles = {
     cardMetaWrap: (locked = false) => ({
         marginTop: "auto",
         width: "100%",
-        paddingBottom: locked ? "9.4vh" : "1.6vh",
+        paddingBottom: locked ? "3.8vh" : "1.6vh",
         display: "grid",
         placeItems: "center",
         gap: "0.6vh",
@@ -987,10 +987,7 @@ export const styles = {
         zIndex: 5,
     },
     cardLockPill: (border, muted) => ({
-        position: "absolute",
-        left: "50%",
-        bottom: "clamp(44px, 8vh, 72px)",
-        transform: "translateX(-50%)",
+        marginTop: "1.8vh",
         padding: "8px 12px 8px 32px",
         borderRadius: 999,
         border: `1px solid ${border}`,
@@ -1007,8 +1004,8 @@ export const styles = {
         display: "inline-flex",
         alignItems: "center",
         gap: 7,
-        zIndex: 3,
         whiteSpace: "nowrap",
+        width: "fit-content",
     }),
     lockIcon: {
         display: "none",

@@ -840,8 +840,11 @@ export default function InflowChatDemo(props) {
                                         <div style={styles.cardDescCentered(C.muted, C.scale)}>
                                             {desc}
                                         </div>
+                                        {locked && (<div style={styles.cardLockPill(C.border, C.muted)}>
+                                                Locked
+                                            </div>)}
                                     </div>
-                                    {locked && (<div style={styles.cardLockPill(C.border, C.muted)}>
+                                    {false && locked && (<div style={styles.cardLockPill(C.border, C.muted)}>
                                             <span style={styles.lockIcon}>
                                                 🔒
                                             </span>
