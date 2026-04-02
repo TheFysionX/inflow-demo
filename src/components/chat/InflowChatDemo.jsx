@@ -830,7 +830,7 @@ export default function InflowChatDemo(props) {
                 }}/>
                                     </div>
                                     <LottieHoverIcon src={lottie} scale={lottieScale} isActive={hoveredCard === key}/>
-                                    <div style={styles.cardMetaWrap}>
+                                    <div style={styles.cardMetaWrap(locked)}>
                                         <div style={styles.cardEyebrow(C.muted, locked)}>
                                             {locked ? "Coming Soon" : "Live Demo"}
                                         </div>
