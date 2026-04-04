@@ -595,14 +595,16 @@ export const styles = {
         fontSize: 13,
         lineHeight: 1.45,
     },
-    detailPanel: (border) => ({
+    detailPanel: (border, isClosing = false) => ({
         border: `1px solid ${border}`,
         borderRadius: 14,
         padding: "10px 12px",
         background: "rgba(255,255,255,0.02)",
         display: "grid",
         gap: 10,
-        animation: "detailOpen 180ms ease",
+        animation: isClosing
+            ? "detailClose 180ms ease forwards"
+            : "detailOpen 180ms ease",
     }),
     detailRow: {
         display: "grid",

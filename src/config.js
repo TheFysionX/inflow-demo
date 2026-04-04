@@ -18,6 +18,7 @@ export const chatConfig = {
     demoLatencyMs: 900,
     typeSpeedCps: 40,
     avatarSize: 32,
+    assistantAvatarUrl: "/helyx-avatar.svg",
     watermarkImageUrl: "/inflow-favicon.png",
     watermarkLabel: "Inflow AI",
     dayTradingLottieUrl: "https://lottie.host/cc9c92f2-2d30-4484-9369-a3204aa8f76b/1nQD604WiQ.json",

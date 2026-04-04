@@ -30,8 +30,54 @@ function getInitialMessages(demoKey) {
     return [{ id: uid(), role: "system", text: DEMO_CATALOG[demoKey].intro }]
 }
 
+const THINKING_STAGE_LABELS = {
+    opening: "Reviewing conversation context",
+    discovery: "Reviewing discovery signals",
+    mid_qualification: "Checking qualification signals",
+    closing_prep: "Preparing the close path",
+    closing: "Checking outcome state",
+    handoff: "Reviewing handoff conditions",
+    devtest: "Preparing test response",
+}
+
+const THINKING_FOCUS_LABELS = {
+    entry_intent: "Clarifying user intent",
+    baseline_experience: "Checking experience level",
+    primary_goal: "Reviewing goal signals",
+    baseline_routine: "Reviewing current routine",
+    main_constraint: "Checking constraints",
+    change_target: "Clarifying the target",
+    success_definition: "Defining success",
+    friction_point: "Looking at friction points",
+    budget_fit: "Checking budget fit",
+    schedule_lock: "Checking schedule fit",
+    pain_clarity: "Clarifying the main pain point",
+    human_handoff: "Reviewing handoff conditions",
+    post_qualification_followup: "Preparing the follow-up",
+    manual_review: "Checking qualification state",
+    contact_offer: "Preparing the contact handoff",
+    devtest_command: "Loading test controls",
+}
+
+function getThinkingSequence(meta) {
+    const stage = meta?.stage || meta?.filled?.last_stage
+    const nextFocus = meta?.next_focus
+    const stageText =
+        THINKING_STAGE_LABELS[stage] || "Analyzing conversation state"
+    const focusText =
+        THINKING_FOCUS_LABELS[nextFocus] || "Choosing the next best question"
+
+    return [
+        { delay: 0, text: "Reviewing conversation context" },
+        { delay: 3200, text: stageText },
+        { delay: 8200, text: focusText },
+        { delay: 15800, text: "Preparing the reply" },
+        { delay: 22600, text: "Finalizing the response" },
+    ]
+}
+
 export default function InflowChatDemo(props) {
-    const { accent, bg, surface, border, text, muted, radius, outerPadding, headerTitle, apiUrl, apiTimeoutMs, minThinkingMs, demoLatencyMs, typeSpeedCps, avatarSize, watermarkImageUrl, watermarkLabel, fontFamily, textScale, dayTradingLottieUrl, fitnessLottieUrl, selfImprovementLottieUrl, dayTradingLottieScale, fitnessLottieScale, selfImprovementLottieScale, starter1, starter2, starter3, contactHref, demoKey = null, onSelectDemo, onExitChat, onResetToConsent, } = props;
+    const { accent, bg, surface, border, text, muted, radius, outerPadding, headerTitle, apiUrl, apiTimeoutMs, minThinkingMs, demoLatencyMs, typeSpeedCps, avatarSize, assistantAvatarUrl, watermarkImageUrl, watermarkLabel, fontFamily, textScale, dayTradingLottieUrl, fitnessLottieUrl, selfImprovementLottieUrl, dayTradingLottieScale, fitnessLottieScale, selfImprovementLottieScale, starter1, starter2, starter3, contactHref, demoKey = null, onSelectDemo, onExitChat, onResetToConsent, } = props;
     // IMPORTANT: In Framer preview/published pages, Color controls can be emitted as rgb()/rgba() strings.
     // Anywhere we need an "accent with alpha" we must NOT do string concat like `${accent}22`.
     // We normalize those via withAlpha(...) so the UI is consistent between Editor and Preview.
@@ -73,7 +119,7 @@ export default function InflowChatDemo(props) {
     const sendingRef = React.useRef(false);
     const abortReasonRef = React.useRef(null);
     // timers/cancel tokens
-    const thinkingTimerRef = React.useRef(null);
+    const thinkingTimersRef = React.useRef([]);
     const typingCancelRef = React.useRef({
         cancelled: false,
     });
@@ -205,17 +251,35 @@ export default function InflowChatDemo(props) {
             ],
         },
     }), []);
+    const clearThinkingSequence = React.useCallback(() => {
+        thinkingTimersRef.current.forEach((timerId) =>
+            window.clearTimeout(timerId)
+        );
+        thinkingTimersRef.current = [];
+    }, []);
+    const startThinkingSequence = React.useCallback((meta) => {
+        const sequence = getThinkingSequence(meta);
+        clearThinkingSequence();
+        if (!sequence.length) {
+            setThinkingNote("Reviewing conversation context");
+            return;
+        }
+        setThinkingNote(sequence[0].text);
+        thinkingTimersRef.current = sequence.slice(1).map((item) =>
+            window.setTimeout(() => {
+                setThinkingNote(item.text);
+            }, item.delay)
+        );
+    }, [clearThinkingSequence]);
     const stopAll = React.useCallback(() => {
-        if (thinkingTimerRef.current)
-            window.clearTimeout(thinkingTimerRef.current);
-        thinkingTimerRef.current = null;
+        clearThinkingSequence();
         if (abortRef.current)
             abortRef.current.abort();
         abortRef.current = null;
         typingCancelRef.current.cancelled = true;
         setIsThinking(false);
         setIsTyping(false);
-    }, []);
+    }, [clearThinkingSequence]);
     const scrollToBottom = React.useCallback(() => {
         const el = scrollerRef.current;
         if (!el)
@@ -249,7 +313,7 @@ export default function InflowChatDemo(props) {
         stopAll();
         setInput("");
         setMessages(getInitialMessages(demo));
-        setThinkingNote("Thinking");
+        setThinkingNote("Reviewing conversation context");
         setShowJump(false);
         setHoveredCard(null);
         if (demo) {
@@ -640,7 +704,6 @@ export default function InflowChatDemo(props) {
                 const msg = data?.error || data?.message || `HTTP ${res.status}`;
                 throw new Error(msg);
             }
-            // Your Worker returns AIResponseShape (reply/stage/filled/etc)
             return { data: data, debug };
         }
         finally {
@@ -662,16 +725,13 @@ export default function InflowChatDemo(props) {
             setMessages(nextMessages);
             setInput("");
             setIsThinking(true);
-            setThinkingNote("Thinking");
-            const longWait = window.setTimeout(() => {
-                setThinkingNote("Still thinking");
-            }, 20000);
+            startThinkingSequence(lastAssistantMeta);
             const started = Date.now();
             const devCmdMatch = trimmed.match(/^DEVTEST:\s*(.+)$/i);
             const devCmdRaw = (devCmdMatch?.[1] || "").trim().toLowerCase();
             try {
                 if (devCmdRaw === "enable") {
-                    window.clearTimeout(longWait);
+                    clearThinkingSequence();
                     setIsThinking(false);
                     setDevTestEnabled(true);
                     const msg = "DEVTEST enabled.";
@@ -679,7 +739,7 @@ export default function InflowChatDemo(props) {
                     return;
                 }
                 if (devCmdRaw === "disable") {
-                    window.clearTimeout(longWait);
+                    clearThinkingSequence();
                     setIsThinking(false);
                     setDevTestEnabled(false);
                     const msg = "DEVTEST disabled.";
@@ -687,7 +747,7 @@ export default function InflowChatDemo(props) {
                     return;
                 }
                 if (devCmdRaw === "status") {
-                    window.clearTimeout(longWait);
+                    clearThinkingSequence();
                     setIsThinking(false);
                     const msg = `DEVTEST is ${devTestEnabled ? "ON" : "OFF"}.`;
                     startTypewriter(msg, { reply: msg, stage: "devtest" }, latestIds);
@@ -695,7 +755,7 @@ export default function InflowChatDemo(props) {
                 }
                 const devTest = getDevTestResponse(trimmed);
                 if (devTest && !devTestEnabled) {
-                    window.clearTimeout(longWait);
+                    clearThinkingSequence();
                     setIsThinking(false);
                     const msg = "DEVTEST is disabled. Type DEVTEST: enable.";
                     startTypewriter(msg, { reply: msg, stage: "devtest" }, latestIds);
@@ -707,7 +767,7 @@ export default function InflowChatDemo(props) {
                     const elapsed = Date.now() - started;
                     if (elapsed < targetMs)
                         await sleep(targetMs - elapsed);
-                    window.clearTimeout(longWait);
+                    clearThinkingSequence();
                     setIsThinking(false);
                     startTypewriter(devTest.reply || "...", devTest, latestIds);
                     return;
@@ -717,13 +777,13 @@ export default function InflowChatDemo(props) {
                 const elapsed = Date.now() - started;
                 if (elapsed < minMs)
                     await sleep(minMs - elapsed);
-                window.clearTimeout(longWait);
+                clearThinkingSequence();
                 setIsThinking(false);
                 startTypewriter(live.data.reply || "...", live.data, live.debug);
             }
             catch (err) {
                 // Abort = user navigated / hit Change / stopAll
-                window.clearTimeout(longWait);
+                clearThinkingSequence();
                 if (err?.name === "AbortError") {
                     setIsThinking(false);
                     const msg = ` Request aborted (timeout=${apiTimeoutMs}ms).`;
@@ -914,7 +974,7 @@ export default function InflowChatDemo(props) {
             const isLastChat = isChat && idx === lastChatIdx;
             const showDivider = isChat && (!isLastChat || isThinking);
             return (<React.Fragment key={m.id}>
-                                    <MessageBubble msg={m} border={C.border} radius={radius} text={C.text} muted={C.muted} avatarSize={avatarSize} accent={C.accent} assistantAvatarUrl={watermarkImageUrl} scale={C.scale} devTestEnabled={devTestEnabled} onRetry={() => {
+                                    <MessageBubble msg={m} border={C.border} radius={radius} text={C.text} muted={C.muted} avatarSize={avatarSize} accent={C.accent} assistantAvatarUrl={assistantAvatarUrl || watermarkImageUrl} scale={C.scale} devTestEnabled={devTestEnabled} onRetry={() => {
                     if (demo)
                         resetConversation(demo);
                 }}/>

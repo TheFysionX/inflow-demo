@@ -1,0 +1,36 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="helyxStroke" x1="48" y1="44" x2="208" y2="212" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F4F6FF"/>
+      <stop offset="0.34" stop-color="#8C76FF"/>
+      <stop offset="0.7" stop-color="#6CB3FF"/>
+      <stop offset="1" stop-color="#E09AD2"/>
+    </linearGradient>
+    <linearGradient id="helyxCore" x1="104" y1="104" x2="152" y2="152" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C5CFF"/>
+      <stop offset="0.58" stop-color="#74ACFF"/>
+      <stop offset="1" stop-color="#D58BC4"/>
+    </linearGradient>
+    <radialGradient id="helyxGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(128 128) rotate(90) scale(88)">
+      <stop stop-color="#8472FF" stop-opacity="0.28"/>
+      <stop offset="0.56" stop-color="#72B0FF" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#72B0FF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect x="56" y="56" width="144" height="144" rx="44" fill="url(#helyxGlow)"/>
+
+  <g stroke="url(#helyxStroke)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M128 44L212 128L128 212L44 128Z" opacity="0.38"/>
+    <path d="M128 70L186 128L128 186L70 128Z" opacity="0.92"/>
+    <path d="M72 72L184 184" opacity="0.78"/>
+    <path d="M184 72L72 184" opacity="0.78"/>
+    <path d="M128 78V178" opacity="0.5"/>
+    <path d="M78 128H178" opacity="0.5"/>
+  </g>
+
+  <g transform="translate(128 128)">
+    <rect x="-22" y="-22" width="44" height="44" rx="12" transform="rotate(45)" fill="url(#helyxCore)"/>
+    <rect x="-10" y="-10" width="20" height="20" rx="5" transform="rotate(45)" stroke="#F6F8FF" stroke-opacity="0.82" stroke-width="4"/>
+  </g>
+</svg>
