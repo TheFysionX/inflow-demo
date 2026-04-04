@@ -6,6 +6,7 @@ import {
     chatConfig,
 } from "./config"
 import ExternalArrowIcon from "./components/ExternalArrowIcon"
+import HelixLaunchOverlay from "./components/HelixLaunchOverlay"
 import ConsentPage from "./pages/ConsentPage"
 import DemoChatPage from "./pages/DemoChatPage"
 import DemoSelectorPage from "./pages/DemoSelectorPage"
@@ -20,6 +21,7 @@ function ProtectedRoute({ isConsented, children }) {
 
 export default function App() {
     const navigate = useNavigate()
+    const [showHelixIntro, setShowHelixIntro] = React.useState(false)
     const [isConsented, setIsConsented] = React.useState(() => {
         try {
             return window.sessionStorage.getItem(CONSENT_SESSION_KEY) === "1"
@@ -48,8 +50,19 @@ export default function App() {
         }
 
         setIsConsented(true)
-        navigate("/demo")
-    }, [navigate])
+        setShowHelixIntro(true)
+    }, [])
+
+    React.useEffect(() => {
+        if (!showHelixIntro) return
+
+        const timer = window.setTimeout(() => {
+            setShowHelixIntro(false)
+            navigate("/demo")
+        }, 2600)
+
+        return () => window.clearTimeout(timer)
+    }, [showHelixIntro, navigate])
 
     const handleResetToConsent = React.useCallback(() => {
         navigate("/")
@@ -122,6 +135,7 @@ export default function App() {
                     />
                 </Routes>
             </main>
+            {showHelixIntro && <HelixLaunchOverlay />}
         </div>
     )
 }

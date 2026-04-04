@@ -779,14 +779,10 @@ export default function InflowChatDemo(props) {
                     <div style={styles.topBar()}>
                         <div style={styles.landingHeader}>
                             <div style={styles.landingTitle(C.text, C.scale)}>
-                                {headerTitle || "Inflow"}
+                                INFLOW AI
                             </div>
                             <div style={styles.landingSubtitle(C.muted, C.scale)}>
-                                Demo Chat
-                            </div>
-                            <div style={styles.landingSubSubtitle(C.muted, C.scale)}>
-                                Choose a demo to preview tone, structure, and
-                                flow.
+                                The future of sales
                             </div>
                         </div>
                     </div>
