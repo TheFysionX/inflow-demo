@@ -204,6 +204,7 @@ export default function DemoSelectorGallery({
 }) {
     const cards = React.useMemo(() => buildSelectorCards(config), [config])
     const [activeKey, setActiveKey] = React.useState(null)
+    const [lottieActiveKey, setLottieActiveKey] = React.useState(null)
     const [layout, setLayout] = React.useState(() => getLayout())
 
     React.useEffect(() => {
@@ -217,6 +218,15 @@ export default function DemoSelectorGallery({
             setActiveKey(null)
         }
     }, [activeKey, cards])
+
+    React.useEffect(() => {
+        if (
+            lottieActiveKey &&
+            !cards.some((card) => card.key === lottieActiveKey)
+        ) {
+            setLottieActiveKey(null)
+        }
+    }, [cards, lottieActiveKey])
 
     return (
         <div className="selector-gallery">
@@ -244,81 +254,104 @@ export default function DemoSelectorGallery({
             >
                 {cards.map((card) => {
                     const isActive = activeKey === card.key
+                    const isLottieActive = lottieActiveKey === card.key
                     const lottieScale = (card.lottieScale || 1) * 1.34
 
                     return (
-                        <button
+                        <div
                             key={card.key}
-                            type="button"
-                            disabled={card.locked}
-                            aria-disabled={card.locked}
-                            className={`selector-card ${card.accentClass} ${card.locked ? "is-locked" : ""} ${isActive ? "is-active" : ""}`}
                             onMouseEnter={() => {
-                                if (!card.locked) {
-                                    setActiveKey(card.key)
-                                }
+                                setLottieActiveKey(card.key)
                             }}
                             onMouseLeave={() => {
-                                if (!card.locked) {
-                                    setActiveKey((current) =>
-                                        current === card.key ? null : current
-                                    )
-                                }
+                                setLottieActiveKey((current) =>
+                                    current === card.key ? null : current
+                                )
                             }}
-                            onFocus={() => {
-                                if (!card.locked) {
-                                    setActiveKey(card.key)
-                                }
-                            }}
-                            onBlur={() => {
-                                if (!card.locked) {
-                                    setActiveKey((current) =>
-                                        current === card.key ? null : current
-                                    )
-                                }
-                            }}
-                            onClick={() => {
-                                if (!card.locked) {
-                                    onSelectDemo(card.key)
-                                }
-                            }}
+                            className="selector-card-shell"
                         >
-                            <div className="selector-card-top">
-                                <div className="selector-card-availability">
-                                    <span
-                                        className={`selector-status-icon ${card.locked ? "is-locked" : "is-live"}`}
-                                    >
-                                        <StatusIcon locked={card.locked} />
-                                    </span>
-                                    <span className="selector-status-label">
-                                        {card.availabilityLabel}
+                            <button
+                                type="button"
+                                disabled={card.locked}
+                                aria-disabled={card.locked}
+                                className={`selector-card ${card.accentClass} ${card.locked ? "is-locked" : ""} ${isActive ? "is-active" : ""}`}
+                                onMouseEnter={() => {
+                                    if (!card.locked) {
+                                        setActiveKey(card.key)
+                                    }
+                                }}
+                                onMouseLeave={() => {
+                                    if (!card.locked) {
+                                        setActiveKey((current) =>
+                                            current === card.key
+                                                ? null
+                                                : current
+                                        )
+                                    }
+                                }}
+                                onFocus={() => {
+                                    if (!card.locked) {
+                                        setActiveKey(card.key)
+                                        setLottieActiveKey(card.key)
+                                    }
+                                }}
+                                onBlur={() => {
+                                    if (!card.locked) {
+                                        setActiveKey((current) =>
+                                            current === card.key
+                                                ? null
+                                                : current
+                                        )
+                                        setLottieActiveKey((current) =>
+                                            current === card.key
+                                                ? null
+                                                : current
+                                        )
+                                    }
+                                }}
+                                onClick={() => {
+                                    if (!card.locked) {
+                                        onSelectDemo(card.key)
+                                    }
+                                }}
+                            >
+                                <div className="selector-card-top">
+                                    <div className="selector-card-availability">
+                                        <span
+                                            className={`selector-status-icon ${card.locked ? "is-locked" : "is-live"}`}
+                                        >
+                                            <StatusIcon locked={card.locked} />
+                                        </span>
+                                        <span className="selector-status-label">
+                                            {card.availabilityLabel}
+                                        </span>
+                                    </div>
+
+                                    <span className="selector-card-metric">
+                                        {card.metric}
                                     </span>
                                 </div>
 
-                                <span className="selector-card-metric">
-                                    {card.metric}
-                                </span>
-                            </div>
+                                <div className="selector-card-visual">
+                                    <SelectorLottie
+                                        src={card.lottie}
+                                        scale={lottieScale}
+                                        isActive={isLottieActive}
+                                    />
+                                </div>
 
-                            <div className="selector-card-visual">
-                                <SelectorLottie
-                                    src={card.lottie}
-                                    scale={lottieScale}
-                                    isActive={isActive}
-                                />
-                            </div>
+                                <div className="selector-card-copy">
+                                    <h2>{card.label}</h2>
+                                    <p>{card.desc}</p>
+                                </div>
 
-                            <div className="selector-card-copy">
-                                <h2>{card.label}</h2>
-                                <p>{card.desc}</p>
-                            </div>
-
-                            <div className="selector-card-bottom">
-                                <span className="selector-card-flow">
-                                    {card.subtitle}
-                                </span>
-                            </div>
-                        </button>
+                                <div className="selector-card-bottom">
+                                    <span className="selector-card-flow">
+                                        {card.subtitle}
+                                    </span>
+                                </div>
+                            </button>
+                        </div>
                     )
                 })}
             </div>

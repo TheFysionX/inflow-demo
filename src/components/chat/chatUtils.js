@@ -3,7 +3,7 @@ export const uid = () =>
 
 export const clamp = (n, a, b) => Math.max(a, Math.min(b, n))
 
-export const UI_VERSION = "v2026-04-04-07"
+export const UI_VERSION = "v2026-04-05-01"
 export const DEVTEST_ENABLED_KEY = "inflow_devtest_enabled"
 export const LEAD_ID_KEY = "inflow_lead_id"
 export const CONVERSATION_ID_KEY = "inflow_conversation_id"
