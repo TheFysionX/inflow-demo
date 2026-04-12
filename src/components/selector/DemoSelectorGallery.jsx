@@ -240,7 +240,7 @@ export default function DemoSelectorGallery({
             <div className="selector-hero">
                 <h1 className="selector-title">INFLOW AI</h1>
                 <p className="selector-subtitle">
-                    Choose a sandbox to preview tone, flow, and qualification
+                    Choose a demo to preview tone, flow, and qualification
                     behavior across the current demo environments.
                 </p>
             </div>

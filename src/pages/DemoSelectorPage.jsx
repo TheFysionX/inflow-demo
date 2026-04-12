@@ -23,7 +23,7 @@ export default function DemoSelectorPage({ onResetToConsent }) {
                 <React.Suspense
                     fallback={
                         <div className="chat-loading">
-                            Loading selector concepts...
+                            Loading Inflow AI...
                         </div>
                     }
                 >

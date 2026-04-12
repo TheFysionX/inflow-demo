@@ -24,7 +24,7 @@ export default function DemoChatPage({ onResetToConsent }) {
                 <React.Suspense
                     fallback={
                         <div className="chat-loading">
-                            Loading demo experience...
+                            Loading Inflow AI...
                         </div>
                     }
                 >

@@ -35,7 +35,7 @@ export default function ConsentPage({ onProceed }) {
                             This page is meant for product review and guided
                             exploration. Some flows are mocked, some are
                             rate-limited, and it is not intended to be treated
-                            like a public sandbox.
+                            like a public production service.
                         </p>
                         <ul className="consent-list">
                             <li>

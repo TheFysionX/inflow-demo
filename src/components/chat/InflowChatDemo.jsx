@@ -30,6 +30,152 @@ function getInitialMessages(demoKey) {
     return [{ id: uid(), role: "system", text: DEMO_CATALOG[demoKey].intro }]
 }
 
+function isPlainObject(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value)
+}
+
+function parseMaybeJson(value, depth = 0) {
+    if (depth > 4 || typeof value !== "string") {
+        return value
+    }
+
+    const trimmed = value.trim()
+    if (!trimmed) {
+        return value
+    }
+
+    const looksJson =
+        trimmed.startsWith("{") ||
+        trimmed.startsWith("[") ||
+        (trimmed.startsWith('"') && trimmed.endsWith('"'))
+
+    if (!looksJson) {
+        return value
+    }
+
+    try {
+        return parseMaybeJson(JSON.parse(trimmed), depth + 1)
+    } catch {
+        return value
+    }
+}
+
+function looksLikeLeakedPayloadString(value) {
+    if (typeof value !== "string") {
+        return false
+    }
+
+    const trimmed = value.trim()
+    if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+        return false
+    }
+
+    const lower = trimmed.toLowerCase()
+    const hasReplyKey =
+        lower.includes('"reply"') ||
+        lower.includes("reply:")
+    const hasMetaKey =
+        lower.includes('"evaluation"') ||
+        lower.includes("evaluation:") ||
+        lower.includes('"stage"') ||
+        lower.includes("stage:") ||
+        lower.includes('"filled"') ||
+        lower.includes("filled:")
+
+    return hasReplyKey && hasMetaKey
+}
+
+function extractReplyText(payload, depth = 0) {
+    if (payload == null || depth > 6) {
+        return null
+    }
+
+    const parsed = parseMaybeJson(payload)
+
+    if (typeof parsed === "string") {
+        const text = parsed.trim()
+        if (looksLikeLeakedPayloadString(text)) {
+            return null
+        }
+        return text || null
+    }
+
+    if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+            const text = extractReplyText(item, depth + 1)
+            if (text) {
+                return text
+            }
+        }
+        return null
+    }
+
+    if (!isPlainObject(parsed)) {
+        return null
+    }
+
+    for (const key of ["reply", "message", "text", "content", "output_text"]) {
+        const text = extractReplyText(parsed[key], depth + 1)
+        if (text) {
+            return text
+        }
+    }
+
+    for (const key of ["data", "result", "response", "assistant", "payload"]) {
+        const text = extractReplyText(parsed[key], depth + 1)
+        if (text) {
+            return text
+        }
+    }
+
+    return null
+}
+
+function normalizeAssistantPayload(rawPayload) {
+    const parsed = parseMaybeJson(rawPayload)
+    const candidates = [parsed]
+
+    if (isPlainObject(parsed)) {
+        for (const key of ["data", "result", "response", "assistant", "payload"]) {
+            if (parsed[key] != null) {
+                candidates.push(parseMaybeJson(parsed[key]))
+            }
+        }
+    }
+
+    for (const candidate of candidates) {
+        const reply = extractReplyText(candidate)
+        if (!reply) {
+            continue
+        }
+
+        if (isPlainObject(candidate)) {
+            return isPlainObject(parsed) && candidate !== parsed
+                ? { ...parsed, ...candidate, reply }
+                : { ...candidate, reply }
+        }
+
+        if (isPlainObject(parsed)) {
+            return { ...parsed, reply }
+        }
+
+        return { reply }
+    }
+
+    return isPlainObject(parsed) ? parsed : { reply: null }
+}
+
+function getApiErrorMessage(payload, status) {
+    const parsed = parseMaybeJson(payload)
+    const message =
+        (isPlainObject(parsed) && extractReplyText(parsed.error)) ||
+        (isPlainObject(parsed) && extractReplyText(parsed.message)) ||
+        (isPlainObject(parsed) && extractReplyText(parsed.detail)) ||
+        (typeof parsed === "string" ? parsed.trim() : "")
+
+    return message || `HTTP ${status}`
+}
+
 const THINKING_STAGE_LABELS = {
     opening: "Reviewing conversation context",
     discovery: "Reviewing discovery signals",
@@ -56,7 +202,7 @@ const THINKING_FOCUS_LABELS = {
     post_qualification_followup: "Preparing the follow-up",
     manual_review: "Checking qualification state",
     contact_offer: "Preparing the contact handoff",
-    devtest_command: "Loading test controls",
+    devtest_command: "Checking test controls",
 }
 
 function getThinkingSequence(meta) {
@@ -165,7 +311,7 @@ export default function InflowChatDemo(props) {
         day_trading: {
             title: "Day Trading",
             subtitle: "DM-style qualifier + next-step framing",
-            intro: "This is a **demo sandbox**. Responses are generated from pre-filled example parameters to showcase flow, tone, and structure — not real trading advice.",
+            intro: "This is a **demo conversation**. Responses are generated from pre-filled example parameters to showcase flow, tone, and structure — not real trading advice.",
             canned: [
                 {
                     reply: "Bet, appreciate you tapping in. What are you trying to get out of trading right now?",
@@ -203,7 +349,7 @@ export default function InflowChatDemo(props) {
         fitness_health: {
             title: "Fitness / Health",
             subtitle: "Simple intake → tailored next question",
-            intro: "This is a **demo sandbox**. Responses are mocked to demonstrate how the assistant collects goals, constraints, and adherence signals — not medical advice.",
+            intro: "This is a **demo conversation**. Responses are mocked to demonstrate how the assistant collects goals, constraints, and adherence signals — not medical advice.",
             canned: [
                 {
                     reply: "Alright — what’s the main goal right now: fat loss, muscle gain, or just feeling better day-to-day?",
@@ -228,7 +374,7 @@ export default function InflowChatDemo(props) {
         self_improvement: {
             title: "Self-Improvement",
             subtitle: "Clarity → leverage point → plan",
-            intro: "This is a **demo sandbox**. Responses are mocked to show how the assistant narrows intent, identifies friction, and proposes a simple plan.",
+            intro: "This is a **demo conversation**. Responses are mocked to show how the assistant narrows intent, identifies friction, and proposes a simple plan.",
             canned: [
                 {
                     reply: "Real question — what are you trying to change first: discipline, confidence, focus, or consistency?",
@@ -596,6 +742,9 @@ export default function InflowChatDemo(props) {
         };
     }
     function startTypewriter(fullText, meta, debug) {
+        const safeText = typeof fullText === "string" && fullText
+            ? fullText
+            : "...";
         // Cancel any prior typing loop
         typingCancelRef.current.cancelled = true;
         typingCancelRef.current = { cancelled: false };
@@ -620,10 +769,10 @@ export default function InflowChatDemo(props) {
         const step = () => {
             if (typingCancelRef.current.cancelled)
                 return;
-            i = Math.min(i + 1, fullText.length);
-            const ch = fullText.charAt(i - 1);
-            setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, text: fullText.slice(0, i) } : m));
-            if (i >= fullText.length) {
+            i = Math.min(i + 1, safeText.length);
+            const ch = safeText.charAt(i - 1);
+            setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, text: safeText.slice(0, i) } : m));
+            if (i >= safeText.length) {
                 setIsTyping(false);
                 window.setTimeout(() => inputRef.current?.focus(), 0);
                 return;
@@ -699,12 +848,17 @@ export default function InflowChatDemo(props) {
             }
             catch { }
             setLatestIds(debug);
-            const data = await res.json().catch(() => null);
+            const rawBody = await res.text().catch(() => "");
+            const data = rawBody ? parseMaybeJson(rawBody) : null;
             if (!res.ok) {
-                const msg = data?.error || data?.message || `HTTP ${res.status}`;
+                const msg = getApiErrorMessage(data, res.status);
                 throw new Error(msg);
             }
-            return { data: data, debug };
+            const normalizedData = normalizeAssistantPayload(data);
+            if (!normalizedData.reply) {
+                throw new Error("Response did not include a usable reply.");
+            }
+            return { data: normalizedData, debug };
         }
         finally {
             if (timeout)
@@ -970,6 +1124,9 @@ export default function InflowChatDemo(props) {
 
                     <div style={styles.contentWrap()}>
                         {messages.map((m, idx) => {
+            if (hasChatContent && m.role === "system") {
+                return null;
+            }
             const isChat = m.role !== "system";
             const isLastChat = isChat && idx === lastChatIdx;
             const showDivider = isChat && (!isLastChat || isThinking);

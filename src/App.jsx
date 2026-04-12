@@ -82,7 +82,7 @@ export default function App() {
                     <div>
                         <div className="brand-title">Demo | Inflow AI</div>
                         <div className="brand-subtitle">
-                            Standalone product sandbox
+                            Standalone product demo
                         </div>
                     </div>
                 </div>

@@ -13,7 +13,7 @@ export const DEMO_CATALOG = {
         selectorDesc:
             "Well rounded, qualification and rapport building, pain amplification.",
         subtitle: "DM-style qualifier + next-step framing",
-        intro: "This is a **demo sandbox**. Responses are generated from pre-filled example parameters to showcase flow, tone, and structure - not real trading advice.",
+        intro: "This is a **demo conversation**. Responses are generated from pre-filled example parameters to showcase flow, tone, and structure - not real trading advice.",
         lottieSrcKey: "dayTradingLottieUrl",
         lottieScaleKey: "dayTradingLottieScale",
         canned: [
@@ -59,7 +59,7 @@ export const DEMO_CATALOG = {
         selectorLabel: "Fitness / Health",
         selectorDesc: "Goal setting, personalized flow for each prospect.",
         subtitle: "Simple intake - tailored next question",
-        intro: "This is a **demo sandbox**. Responses are mocked to demonstrate how the assistant collects goals, constraints, and adherence signals - not medical advice.",
+        intro: "This is a **demo conversation**. Responses are mocked to demonstrate how the assistant collects goals, constraints, and adherence signals - not medical advice.",
         lottieSrcKey: "fitnessLottieUrl",
         lottieScaleKey: "fitnessLottieScale",
         canned: [
@@ -91,7 +91,7 @@ export const DEMO_CATALOG = {
         selectorDesc:
             "Deep-diving on personal issues, rapport and psychology trained.",
         subtitle: "Clarity - leverage point - plan",
-        intro: "This is a **demo sandbox**. Responses are mocked to show how the assistant narrows intent, identifies friction, and proposes a simple plan.",
+        intro: "This is a **demo conversation**. Responses are mocked to show how the assistant narrows intent, identifies friction, and proposes a simple plan.",
         lottieSrcKey: "selfImprovementLottieUrl",
         lottieScaleKey: "selfImprovementLottieScale",
         canned: [
