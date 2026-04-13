@@ -1,6 +1,7 @@
 export const HOME_URL = "https://inflowai.net";
 export const CONTACT_URL = "https://inflowai.net/#contact-us";
 export const CONSENT_SESSION_KEY = "inflow_demo_consent_v1";
+const DEFAULT_API_URL = "https://inflow-demo.theo-lupescu.workers.dev/chat";
 export const chatConfig = {
     headerTitle: "Inflow",
     contactHref: CONTACT_URL,
@@ -10,7 +11,7 @@ export const chatConfig = {
     text: "#FFFFFF",
     muted: "rgba(255,255,255,0.72)",
     border: "rgba(255,255,255,0.10)",
-    apiUrl: "https://inflow-demo.theo-lupescu.workers.dev/chat",
+    apiUrl: import.meta.env.VITE_INFLOW_API_URL || DEFAULT_API_URL,
     apiTimeoutMs: 0,
     minThinkingMs: 450,
     radius: 22,

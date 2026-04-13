@@ -54,6 +54,111 @@ function UserAvatar({ size }) {
     )
 }
 
+function humanizeToken(value) {
+    const normalized = String(value ?? "")
+        .replace(/[_/]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+    if (!normalized) {
+        return ""
+    }
+
+    return normalized.replace(/\b\w/g, (character) => character.toUpperCase())
+}
+
+function compactText(value, maxLength = 140) {
+    const normalized = String(value ?? "")
+        .replace(/\s+/g, " ")
+        .trim()
+    if (!normalized || normalized.length <= maxLength) {
+        return normalized
+    }
+
+    return `${normalized.slice(0, maxLength - 3).trimEnd()}...`
+}
+
+function deriveTraceCode(meta) {
+    const traceCode = String(
+        meta?.details?.d_trace || meta?.decision_trace?.trace_code || ""
+    ).trim()
+    if (traceCode) {
+        return traceCode
+    }
+
+    const docCount = Array.isArray(meta?.decision_trace?.docs_used)
+        ? meta.decision_trace.docs_used.length
+        : 0
+    return docCount > 0 ? String(1000 + docCount * 137) : ""
+}
+
+function buildBookingLabelFromMeta(filled, details) {
+    const detailsLabel = String(details.booking_label || "").trim()
+    if (detailsLabel) {
+        return detailsLabel
+    }
+
+    const day = String(filled.confirmed_day || "").trim()
+    const time = String(
+        filled.confirmed_time || filled.booked_time || filled.call_time || ""
+    ).trim()
+    if (!day) {
+        return time
+    }
+    if (!time) {
+        return day
+    }
+
+    return time.toLowerCase().includes(day.toLowerCase())
+        ? time
+        : `${day} ${time}`
+}
+
+function buildDetailSummary(meta) {
+    const filled =
+        meta?.filled && typeof meta.filled === "object" ? meta.filled : {}
+    const details =
+        meta?.details && typeof meta.details === "object" ? meta.details : {}
+    const qualificationSignal = String(
+        filled.qualification_signal || "unclear"
+    ).trim()
+    const threadClosed =
+        filled.thread_closed === true || meta?.state?.thread_closed === true
+    const needsHandoff = filled.needs_handoff === true
+    const bookingLabel = buildBookingLabelFromMeta(filled, details)
+    const pathLabel = String(
+        details.path_label ||
+            [meta?.stage, meta?.next_focus]
+                .map(humanizeToken)
+                .filter(Boolean)
+                .join(" / ")
+    ).trim()
+
+    return {
+        statusLabel: String(
+            details.status_label ||
+                (needsHandoff
+                    ? "Human review"
+                    : threadClosed
+                      ? "Conversation ended"
+                      : "Live")
+        ).trim(),
+        traceCode: deriveTraceCode(meta),
+        pathLabel,
+        nextFocusLabel: String(
+            details.next_focus_label || humanizeToken(meta?.next_focus)
+        ).trim(),
+        signalLabel: String(
+            details.signal_label || humanizeToken(qualificationSignal)
+        ).trim(),
+        confidenceLabel: String(details.confidence_label || "").trim(),
+        threadLabel: String(
+            details.thread_label || (threadClosed ? "Closed" : "Open")
+        ).trim(),
+        bookingLabel,
+        noteLabel: compactText(meta?.reason_short, 160),
+    }
+}
+
 export function MessageBubble(props) {
     const {
         msg,
@@ -80,6 +185,10 @@ export function MessageBubble(props) {
             : qualificationSignal === "unqualified"
               ? "unqualified"
               : "unclear"
+    const detailSummary = React.useMemo(
+        () => buildDetailSummary(msg.meta),
+        [msg.meta]
+    )
 
     React.useEffect(() => {
         if (showDetails) {
@@ -198,55 +307,49 @@ export function MessageBubble(props) {
                                     detailsClosing
                                 )}
                             >
-                                {msg.meta.stage && (
+                                {detailSummary.statusLabel && (
                                     <div style={styles.detailRow}>
                                         <div style={styles.detailLabel}>
-                                            Stage
+                                            Status
                                         </div>
                                         <div style={styles.detailValue}>
-                                            {msg.meta.stage}
+                                            {detailSummary.statusLabel}
                                         </div>
                                     </div>
                                 )}
-                                {msg.meta.next_focus && (
-                                    <div style={styles.detailRow}>
-                                        <div style={styles.detailLabel}>
-                                            Next Focus
-                                        </div>
-                                        <div style={styles.detailValue}>
-                                            {msg.meta.next_focus}
-                                        </div>
-                                    </div>
-                                )}
-                                {msg.meta.reason_short && (
-                                    <div style={styles.detailRow}>
-                                        <div style={styles.detailLabel}>
-                                            Reason
-                                        </div>
-                                        <div style={styles.detailValue}>
-                                            {msg.meta.reason_short}
-                                        </div>
-                                    </div>
-                                )}
-                                {msg.meta.decision_trace?.docs_used && (
+                                {detailSummary.traceCode && (
                                     <div style={styles.detailRow}>
                                         <div style={styles.detailLabel}>
                                             D-Trace
                                         </div>
+                                        <div style={styles.detailMonoValue}>
+                                            {detailSummary.traceCode}
+                                        </div>
+                                    </div>
+                                )}
+                                {detailSummary.pathLabel && (
+                                    <div style={styles.detailRow}>
+                                        <div style={styles.detailLabel}>
+                                            Path
+                                        </div>
                                         <div style={styles.detailValue}>
-                                            {Array.isArray(
-                                                msg.meta.decision_trace
-                                                    .docs_used
-                                            )
-                                                ? msg.meta.decision_trace
-                                                      .docs_used.length
-                                                : 0}
+                                            {detailSummary.pathLabel}
+                                        </div>
+                                    </div>
+                                )}
+                                {detailSummary.nextFocusLabel && (
+                                    <div style={styles.detailRow}>
+                                        <div style={styles.detailLabel}>
+                                            Next Step
+                                        </div>
+                                        <div style={styles.detailValue}>
+                                            {detailSummary.nextFocusLabel}
                                         </div>
                                     </div>
                                 )}
                                 <div style={styles.detailRow}>
                                     <div style={styles.detailLabel}>
-                                        Qualification
+                                        Signal
                                     </div>
                                     <div style={styles.detailValue}>
                                         <span
@@ -255,8 +358,51 @@ export function MessageBubble(props) {
                                             )}
                                             title={`Qualification: ${qualificationTone}`}
                                         />
+                                        <span style={{ marginLeft: 8 }}>
+                                            {detailSummary.signalLabel}
+                                        </span>
                                     </div>
                                 </div>
+                                {detailSummary.confidenceLabel && (
+                                    <div style={styles.detailRow}>
+                                        <div style={styles.detailLabel}>
+                                            Confidence
+                                        </div>
+                                        <div style={styles.detailValue}>
+                                            {detailSummary.confidenceLabel}
+                                        </div>
+                                    </div>
+                                )}
+                                {detailSummary.threadLabel && (
+                                    <div style={styles.detailRow}>
+                                        <div style={styles.detailLabel}>
+                                            Thread
+                                        </div>
+                                        <div style={styles.detailValue}>
+                                            {detailSummary.threadLabel}
+                                        </div>
+                                    </div>
+                                )}
+                                {detailSummary.bookingLabel && (
+                                    <div style={styles.detailRow}>
+                                        <div style={styles.detailLabel}>
+                                            Booking
+                                        </div>
+                                        <div style={styles.detailValue}>
+                                            {detailSummary.bookingLabel}
+                                        </div>
+                                    </div>
+                                )}
+                                {detailSummary.noteLabel && (
+                                    <div style={styles.detailRow}>
+                                        <div style={styles.detailLabel}>
+                                            Note
+                                        </div>
+                                        <div style={styles.detailValue}>
+                                            {detailSummary.noteLabel}
+                                        </div>
+                                    </div>
+                                )}
                                 {devTestEnabled && (
                                     <>
                                         <div style={styles.detailRow}>

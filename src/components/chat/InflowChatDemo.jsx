@@ -214,7 +214,7 @@ function getThinkingSequence(meta) {
         THINKING_FOCUS_LABELS[nextFocus] || "Choosing the next best question"
 
     return [
-        { delay: 0, text: "Reviewing conversation context" },
+        { delay: 0, text: "Connecting to live demo runtime" },
         { delay: 3200, text: stageText },
         { delay: 8200, text: focusText },
         { delay: 15800, text: "Preparing the reply" },
@@ -244,7 +244,9 @@ export default function InflowChatDemo(props) {
     const [isThinking, setIsThinking] = React.useState(false);
     const [isTyping, setIsTyping] = React.useState(false);
     const [showJump, setShowJump] = React.useState(false);
-    const [thinkingNote, setThinkingNote] = React.useState("Thinking");
+    const [thinkingNote, setThinkingNote] = React.useState(
+        "Connecting to live demo runtime"
+    );
     const [cardsHoverReady, setCardsHoverReady] = React.useState(false);
     const [hoveredCard, setHoveredCard] = React.useState(null);
     const [pickerLayout, setPickerLayout] = React.useState(() => {
@@ -306,7 +308,9 @@ export default function InflowChatDemo(props) {
             lastQualSignal: "unclear",
         };
     }, [messages]);
-    const shouldDisableSend = isThinking || isTyping || handoffHit || input.trim().length === 0;
+    const conversationLocked = handoffHit || threadClosed;
+    const shouldDisableSend =
+        isThinking || isTyping || conversationLocked || input.trim().length === 0;
     const DEMOS = React.useMemo(() => ({
         day_trading: {
             title: "Day Trading",
@@ -459,7 +463,7 @@ export default function InflowChatDemo(props) {
         stopAll();
         setInput("");
         setMessages(getInitialMessages(demo));
-        setThinkingNote("Reviewing conversation context");
+        setThinkingNote("Connecting to live demo runtime");
         setShowJump(false);
         setHoveredCard(null);
         if (demo) {
@@ -804,6 +808,7 @@ export default function InflowChatDemo(props) {
         const timeoutMs = Number.isFinite(raw) ? raw : 0;
         console.log("[chat] apiUrl=", apiUrl, "timeoutMs=", timeoutMs);
         let timeout = null;
+        let sawLiveProgress = false;
         if (timeoutMs > 0) {
             timeout = window.setTimeout(() => {
                 abortReasonRef.current = "timeout";
@@ -814,6 +819,7 @@ export default function InflowChatDemo(props) {
             const storedIds = getStoredThreadIds();
             const requestHeaders = {
                 "Content-Type": "application/json",
+                "X-Inflow-Stream": "events-v1",
             };
             if (storedIds.lead_id) {
                 requestHeaders["X-Inflow-Lead-Id"] = storedIds.lead_id;
@@ -848,6 +854,71 @@ export default function InflowChatDemo(props) {
             }
             catch { }
             setLatestIds(debug);
+            const contentType = (res.headers.get("Content-Type") || "").toLowerCase();
+
+            if (res.body && contentType.includes("application/x-ndjson")) {
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = "";
+                let finalData = null;
+                let streamError = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+                    let newlineIndex = buffer.indexOf("\n");
+                    while (newlineIndex >= 0) {
+                        const line = buffer.slice(0, newlineIndex).trim();
+                        buffer = buffer.slice(newlineIndex + 1);
+                        if (line) {
+                            const event = parseMaybeJson(line);
+                            if (isPlainObject(event) && event.type === "progress") {
+                                const label = typeof event.label === "string" ? event.label.trim() : "";
+                                if (label) {
+                                    sawLiveProgress = true;
+                                    clearThinkingSequence();
+                                    setThinkingNote(label);
+                                }
+                            } else if (isPlainObject(event) && event.type === "result") {
+                                finalData = normalizeAssistantPayload(event.data);
+                            } else if (isPlainObject(event) && event.type === "error") {
+                                streamError = typeof event.message === "string"
+                                    ? event.message
+                                    : "The live demo request failed.";
+                            }
+                        }
+                        newlineIndex = buffer.indexOf("\n");
+                    }
+
+                    if (done) {
+                        break;
+                    }
+                }
+
+                if (buffer.trim()) {
+                    const event = parseMaybeJson(buffer.trim());
+                    if (isPlainObject(event) && event.type === "result") {
+                        finalData = normalizeAssistantPayload(event.data);
+                    } else if (isPlainObject(event) && event.type === "error") {
+                        streamError = typeof event.message === "string"
+                            ? event.message
+                            : "The live demo request failed.";
+                    }
+                }
+
+                if (streamError) {
+                    throw new Error(streamError);
+                }
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}`);
+                }
+                if (!finalData?.reply) {
+                    throw new Error("Response did not include a usable reply.");
+                }
+                return { data: finalData, debug };
+            }
+
             const rawBody = await res.text().catch(() => "");
             const data = rawBody ? parseMaybeJson(rawBody) : null;
             if (!res.ok) {
@@ -861,6 +932,9 @@ export default function InflowChatDemo(props) {
             return { data: normalizedData, debug };
         }
         finally {
+            if (!sawLiveProgress) {
+                setThinkingNote("Finalizing the response");
+            }
             if (timeout)
                 window.clearTimeout(timeout);
             abortRef.current = null;
@@ -868,7 +942,7 @@ export default function InflowChatDemo(props) {
     }
     async function onSend() {
         const trimmed = input.trim();
-        if (!trimmed || isThinking || isTyping || handoffHit || !demo)
+        if (!trimmed || isThinking || isTyping || conversationLocked || !demo)
             return;
         if (sendingRef.current)
             return;
@@ -1221,7 +1295,11 @@ export default function InflowChatDemo(props) {
             if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
             }
-        }} placeholder="Message Inflow..." style={styles.textarea(C.text, C.scale)} disabled={isThinking || isTyping} autoComplete="off" autoCorrect="off" spellCheck={false} rows={1}/>
+        }} placeholder={threadClosed
+            ? "Conversation ended"
+            : handoffHit
+                ? "Handoff required"
+                : "Message Inflow..."} style={styles.textarea(C.text, C.scale)} disabled={isThinking || isTyping || conversationLocked} autoComplete="off" autoCorrect="off" spellCheck={false} rows={1}/>
                         <button onClick={onSend} style={styles.sendBtn(C.accent, C.border, shouldDisableSend)} disabled={shouldDisableSend} aria-label="Send">
                             <span style={styles.sendIcon()}/>
                         </button>
