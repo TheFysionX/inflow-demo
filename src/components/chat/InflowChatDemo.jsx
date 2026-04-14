@@ -451,6 +451,18 @@ export default function InflowChatDemo(props) {
             return { lead_id: undefined, conversation_id: undefined };
         }
     }, [normalizeId]);
+    const clearStoredThreadIds = React.useCallback(() => {
+        try {
+            window.localStorage.removeItem(LEAD_ID_KEY);
+            window.localStorage.removeItem(CONVERSATION_ID_KEY);
+        }
+        catch { }
+        setLatestIds((prev) => ({
+            ...prev,
+            lead_id: undefined,
+            conversation_id: undefined,
+        }));
+    }, []);
     React.useEffect(() => {
         const onResize = () => {
             const viewport = getViewportSize();
@@ -461,6 +473,7 @@ export default function InflowChatDemo(props) {
     }, []);
     React.useEffect(() => {
         stopAll();
+        clearStoredThreadIds();
         setInput("");
         setMessages(getInitialMessages(demo));
         setThinkingNote("Connecting to live demo runtime");
@@ -474,7 +487,7 @@ export default function InflowChatDemo(props) {
             top: 0,
             behavior: "smooth",
         }), 0);
-    }, [demo, stopAll]);
+    }, [clearStoredThreadIds, demo, stopAll]);
     // Enter-to-send reliability in Framer: handle Enter at window level when input is focused.
     React.useEffect(() => {
         if (!demo)
@@ -565,8 +578,11 @@ export default function InflowChatDemo(props) {
         if (!nextDemo)
             return;
         stopAll();
+        clearStoredThreadIds();
         setInput("");
         setMessages(getInitialMessages(nextDemo));
+        setThinkingNote("Connecting to live demo runtime");
+        setShowJump(false);
         window.setTimeout(() => inputRef.current?.focus(), 50);
     }
     function getMockResponse(userText) {
