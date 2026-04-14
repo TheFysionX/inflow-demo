@@ -4,6 +4,13 @@ import StyleTag from "./StyleTag"
 import { BotBlobAvatar, MessageBubble } from "./ChatPrimitives"
 import { DEMO_CATALOG, getDemoCards, getDemoMeta } from "./demoCatalog"
 import {
+    deriveAnalyticsUrl,
+    getAnalyticsIdentity,
+    getNavigationTimingMetrics,
+    getPagePath,
+    sendAnalyticsBatch,
+} from "./chatAnalytics"
+import {
     clamp,
     computeDemoCardLayout,
     CONVERSATION_ID_KEY,
@@ -31,6 +38,12 @@ function getInitialMessages(demoKey) {
 }
 
 const DEMO_SESSION_STORAGE_KEY = "inflow_demo_sessions_v1"
+
+function countConversationMessages(messageList) {
+    return (Array.isArray(messageList) ? messageList : []).filter(
+        (message) => message?.role && message.role !== "system"
+    ).length
+}
 
 function normalizeStoredId(value) {
     const trimmed = typeof value === "string" ? value.trim() : ""
@@ -377,6 +390,7 @@ export default function InflowChatDemo(props) {
         }
     });
     const [latestIds, setLatestIds] = React.useState(() => initialSessionRef.current?.latestIds ?? {});
+    const analyticsUrl = React.useMemo(() => deriveAnalyticsUrl(apiUrl), [apiUrl]);
     const scrollerRef = React.useRef(null);
     const inputRef = React.useRef(null);
     const sendingRef = React.useRef(false);
@@ -387,6 +401,22 @@ export default function InflowChatDemo(props) {
         cancelled: false,
     });
     const abortRef = React.useRef(null);
+    const analyticsIdentityRef = React.useRef(getAnalyticsIdentity());
+    const analyticsQueueRef = React.useRef([]);
+    const analyticsFlushTimerRef = React.useRef(null);
+    const analyticsMaxScrollDepthRef = React.useRef(0);
+    const analyticsPageOpenedAtRef = React.useRef(Date.now());
+    const analyticsVisibleMsRef = React.useRef(0);
+    const analyticsVisibleStartedAtRef = React.useRef(
+        typeof document !== "undefined" && document.visibilityState === "hidden"
+            ? 0
+            : Date.now()
+    );
+    const latestIdsRef = React.useRef(initialSessionRef.current?.latestIds ?? {});
+    const demoRef = React.useRef(demo);
+    const messagesRef = React.useRef(initialSessionRef.current?.messages ?? getInitialMessages(demo));
+    const threadClosedRef = React.useRef(false);
+    const lastMessageSentAtRef = React.useRef(0);
     const demoCards = React.useMemo(() => getDemoCards({
         dayTradingLottieUrl,
         fitnessLottieUrl,
@@ -567,6 +597,107 @@ export default function InflowChatDemo(props) {
         conversation_id: normalizeId(latestIds.conversation_id),
     }), [latestIds, normalizeId]);
     React.useEffect(() => {
+        latestIdsRef.current = latestIds
+    }, [latestIds]);
+    React.useEffect(() => {
+        demoRef.current = demo
+    }, [demo]);
+    React.useEffect(() => {
+        messagesRef.current = messages
+    }, [messages]);
+    React.useEffect(() => {
+        threadClosedRef.current = threadClosed
+    }, [threadClosed]);
+    const flushAnalyticsEvents = React.useCallback((options = {}) => {
+        if (analyticsFlushTimerRef.current) {
+            window.clearTimeout(analyticsFlushTimerRef.current)
+            analyticsFlushTimerRef.current = null
+        }
+
+        const queuedEvents = analyticsQueueRef.current
+        if (!analyticsUrl || queuedEvents.length === 0) {
+            return Promise.resolve(false)
+        }
+
+        const events = queuedEvents.splice(0, queuedEvents.length)
+        const ids = latestIdsRef.current || {}
+        const identity = analyticsIdentityRef.current
+
+        return sendAnalyticsBatch(
+            analyticsUrl,
+            {
+                demo: demoRef.current || undefined,
+                ui_version: UI_VERSION,
+                leadId: normalizeId(ids.lead_id),
+                conversationId: normalizeId(ids.conversation_id),
+                browserId: identity.browserId,
+                pageSessionId: identity.pageSessionId,
+                events,
+            },
+            { useBeacon: options.useBeacon === true }
+        )
+    }, [analyticsUrl, normalizeId]);
+    const scheduleAnalyticsFlush = React.useCallback((delay = 1200) => {
+        if (!analyticsUrl) {
+            return
+        }
+        if (analyticsFlushTimerRef.current) {
+            return
+        }
+
+        analyticsFlushTimerRef.current = window.setTimeout(() => {
+            analyticsFlushTimerRef.current = null
+            void flushAnalyticsEvents()
+        }, clamp(delay, 120, 5000))
+    }, [analyticsUrl, flushAnalyticsEvents]);
+    const enqueueAnalyticsEvent = React.useCallback((eventName, details = {}) => {
+        if (!analyticsUrl || !eventName) {
+            return
+        }
+
+        analyticsQueueRef.current.push({
+            eventId: uid(),
+            createdAt: new Date().toISOString(),
+            eventName,
+            demoKey: details.demoKey || demoRef.current || "",
+            pagePath: details.pagePath || getPagePath(),
+            target: details.target || "",
+            numericValue:
+                typeof details.numericValue === "number" && Number.isFinite(details.numericValue)
+                    ? details.numericValue
+                    : undefined,
+            meta: details.meta,
+            uiVersion: UI_VERSION,
+        })
+
+        if (analyticsQueueRef.current.length >= 10) {
+            void flushAnalyticsEvents()
+            return
+        }
+
+        scheduleAnalyticsFlush()
+    }, [analyticsUrl, flushAnalyticsEvents, scheduleAnalyticsFlush]);
+    const enqueuePageSummary = React.useCallback((reason) => {
+        const now = Date.now()
+        const visibleMs =
+            analyticsVisibleMsRef.current +
+            (analyticsVisibleStartedAtRef.current
+                ? now - analyticsVisibleStartedAtRef.current
+                : 0)
+
+        enqueueAnalyticsEvent("page_dwell", {
+            target: reason,
+            numericValue: now - analyticsPageOpenedAtRef.current,
+            meta: {
+                visible_ms: visibleMs,
+                max_scroll_depth: Math.round(analyticsMaxScrollDepthRef.current),
+                message_count: countConversationMessages(messagesRef.current),
+                demo_key: demoRef.current || "",
+                thread_closed: threadClosedRef.current === true,
+            },
+        })
+    }, [enqueueAnalyticsEvent]);
+    React.useEffect(() => {
         clearLegacyThreadIds()
     }, [clearLegacyThreadIds]);
     React.useEffect(() => {
@@ -577,6 +708,19 @@ export default function InflowChatDemo(props) {
         window.addEventListener("resize", onResize, { passive: true });
         return () => window.removeEventListener("resize", onResize);
     }, []);
+    React.useEffect(() => {
+        const metrics = getNavigationTimingMetrics()
+        if (!metrics) {
+            return
+        }
+
+        enqueueAnalyticsEvent("page_performance", {
+            target: metrics.type || "navigate",
+            numericValue: metrics.domCompleteMs,
+            meta: metrics,
+        })
+        scheduleAnalyticsFlush(240)
+    }, [enqueueAnalyticsEvent, scheduleAnalyticsFlush]);
     React.useEffect(() => {
         stopAll();
         setInput("");
@@ -597,6 +741,23 @@ export default function InflowChatDemo(props) {
             behavior: "smooth",
         }), 0);
     }, [demo, stopAll]);
+    React.useEffect(() => {
+        if (!demo) {
+            return
+        }
+
+        const storedSession = getStoredDemoSession(demo)
+        const restoredMessageCount = countConversationMessages(storedSession?.messages)
+
+        enqueueAnalyticsEvent("demo_open", {
+            target: demo,
+            meta: {
+                restored: restoredMessageCount > 0,
+                restored_message_count: restoredMessageCount,
+            },
+        })
+        scheduleAnalyticsFlush(300)
+    }, [demo, enqueueAnalyticsEvent, scheduleAnalyticsFlush]);
     // Enter-to-send reliability in Framer: handle Enter at window level when input is focused.
     React.useEffect(() => {
         if (!demo)
@@ -642,6 +803,12 @@ export default function InflowChatDemo(props) {
         const onScroll = () => {
             const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
             setShowJump(!nearBottom);
+            const maxScrollable = Math.max(el.scrollHeight - el.clientHeight, 1)
+            const depth = Math.max(0, Math.min(100, (el.scrollTop / maxScrollable) * 100))
+            analyticsMaxScrollDepthRef.current = Math.max(
+                analyticsMaxScrollDepthRef.current,
+                depth
+            )
         };
         el.addEventListener("scroll", onScroll, { passive: true });
         onScroll();
@@ -658,6 +825,15 @@ export default function InflowChatDemo(props) {
     React.useEffect(() => {
         return () => stopAll();
     }, [stopAll]);
+    React.useEffect(() => {
+        return () => {
+            if (analyticsFlushTimerRef.current) {
+                window.clearTimeout(analyticsFlushTimerRef.current)
+                analyticsFlushTimerRef.current = null
+            }
+            void flushAnalyticsEvents({ useBeacon: true })
+        }
+    }, [flushAnalyticsEvents]);
     React.useEffect(() => {
         if (demo) {
             setCardsHoverReady(false);
@@ -682,11 +858,46 @@ export default function InflowChatDemo(props) {
         }
         catch { }
     }, [devTestEnabled]);
+    React.useEffect(() => {
+        const onVisibilityChange = () => {
+            if (document.visibilityState === "hidden") {
+                if (analyticsVisibleStartedAtRef.current) {
+                    analyticsVisibleMsRef.current +=
+                        Date.now() - analyticsVisibleStartedAtRef.current
+                    analyticsVisibleStartedAtRef.current = 0
+                }
+                enqueuePageSummary("hidden")
+                void flushAnalyticsEvents({ useBeacon: true })
+                return
+            }
+
+            analyticsVisibleStartedAtRef.current = Date.now()
+        }
+
+        const onPageHide = () => {
+            if (analyticsVisibleStartedAtRef.current) {
+                analyticsVisibleMsRef.current +=
+                    Date.now() - analyticsVisibleStartedAtRef.current
+                analyticsVisibleStartedAtRef.current = 0
+            }
+            enqueuePageSummary("pagehide")
+            void flushAnalyticsEvents({ useBeacon: true })
+        }
+
+        document.addEventListener("visibilitychange", onVisibilityChange)
+        window.addEventListener("pagehide", onPageHide)
+
+        return () => {
+            document.removeEventListener("visibilitychange", onVisibilityChange)
+            window.removeEventListener("pagehide", onPageHide)
+        }
+    }, [enqueuePageSummary, flushAnalyticsEvents]);
     function resetConversation(nextDemo) {
         if (!nextDemo)
             return;
         stopAll();
         clearStoredDemoSession(nextDemo);
+        lastMessageSentAtRef.current = 0;
         setInput("");
         setLatestIds({});
         setMessages(getInitialMessages(nextDemo));
@@ -927,6 +1138,7 @@ export default function InflowChatDemo(props) {
         // Cancel prior in-flight request
         if (abortRef.current)
             abortRef.current.abort();
+        abortReasonRef.current = null;
         const controller = new AbortController();
         abortRef.current = controller;
         // --- timeout (0 = no abort)
@@ -942,9 +1154,12 @@ export default function InflowChatDemo(props) {
             }, clamp(timeoutMs, 2000, 600000));
         }
         try {
+            const analyticsIdentity = analyticsIdentityRef.current;
             const requestHeaders = {
                 "Content-Type": "application/json",
                 "X-Inflow-Stream": "events-v1",
+                "X-Inflow-Browser-Id": analyticsIdentity.browserId,
+                "X-Inflow-Page-Session-Id": analyticsIdentity.pageSessionId,
             };
             if (currentThreadIds.lead_id) {
                 requestHeaders["X-Inflow-Lead-Id"] = currentThreadIds.lead_id;
@@ -1065,11 +1280,24 @@ export default function InflowChatDemo(props) {
         sendingRef.current = true;
         const userMsg = { id: uid(), role: "user", text: trimmed };
         const nextMessages = [...messages, userMsg];
+        const sentAt = Date.now();
+        const gapMs = lastMessageSentAtRef.current
+            ? sentAt - lastMessageSentAtRef.current
+            : null;
+        lastMessageSentAtRef.current = sentAt;
         try {
             setMessages(nextMessages);
             setInput("");
             setIsThinking(true);
             startThinkingSequence(lastAssistantMeta);
+            enqueueAnalyticsEvent("message_sent", {
+                target: demo,
+                numericValue: trimmed.length,
+                meta: {
+                    gap_ms: gapMs,
+                    message_count: countConversationMessages(nextMessages),
+                },
+            });
             const started = Date.now();
             const devCmdMatch = trimmed.match(/^DEVTEST:\s*(.+)$/i);
             const devCmdRaw = (devCmdMatch?.[1] || "").trim().toLowerCase();
@@ -1123,6 +1351,19 @@ export default function InflowChatDemo(props) {
                     await sleep(minMs - elapsed);
                 clearThinkingSequence();
                 setIsThinking(false);
+                enqueueAnalyticsEvent("assistant_reply", {
+                    target: live.data?.stage || demo,
+                    numericValue: elapsed,
+                    meta: {
+                        reply_length: (live.data?.reply || "").length,
+                        next_focus: live.data?.next_focus || "",
+                        qualification_signal: live.data?.filled?.qualification_signal || "",
+                        needs_handoff: live.data?.filled?.needs_handoff === true,
+                        thread_closed: live.data?.filled?.thread_closed === true,
+                        status_label: live.data?.details?.status_label || "",
+                        d_trace: live.data?.details?.d_trace || "",
+                    },
+                });
                 startTypewriter(live.data.reply || "...", live.data, live.debug);
             }
             catch (err) {
@@ -1130,11 +1371,26 @@ export default function InflowChatDemo(props) {
                 clearThinkingSequence();
                 if (err?.name === "AbortError") {
                     setIsThinking(false);
+                    if (abortReasonRef.current === "timeout") {
+                        enqueueAnalyticsEvent("chat_request_failed", {
+                            target: "timeout",
+                            numericValue: Number(apiTimeoutMs) || 0,
+                            meta: {
+                                reason: "timeout",
+                            },
+                        });
+                    }
                     const msg = ` Request aborted (timeout=${apiTimeoutMs}ms).`;
                     startTypewriter(msg, { reply: msg, stage: "error" });
                     return;
                 }
                 setIsThinking(false);
+                enqueueAnalyticsEvent("chat_request_failed", {
+                    target: demo,
+                    meta: {
+                        reason: err?.message || String(err),
+                    },
+                });
                 const msg = `Request failed: ${err?.message || String(err)}`;
                 startTypewriter(msg, { reply: msg, stage: "error" });
             }
@@ -1193,8 +1449,13 @@ export default function InflowChatDemo(props) {
 
                     <div style={styles.pickerGrid(pickerLayout)}>
                         {demoCards.map(({ key, label, desc, lottie, lottieScale, locked, }, i) => (<button key={key} type="button" onClick={() => {
-                    if (!locked)
+                    if (!locked) {
+                        enqueueAnalyticsEvent("demo_selected", {
+                            target: key,
+                            meta: { label },
+                        })
                         onSelectDemo?.(key);
+                    }
                 }} onPointerEnter={() => setHoveredCard(key)} onPointerLeave={() => setHoveredCard((current) => current === key ? null : current)} onFocus={() => setHoveredCard(key)} onBlur={() => setHoveredCard((current) => current === key ? null : current)} style={{
                     ...styles.demoCard(C.border, radius, locked, i, !cardsHoverReady, pickerLayout),
                     background: styles.cardGradient(key),
@@ -1292,10 +1553,20 @@ export default function InflowChatDemo(props) {
                         </div>
 
                         <div style={styles.headerActions}>
-                            <button type="button" onClick={() => resetConversation(demo)} style={styles.backBtn(C.border, radius, C.text, C.scale)}>
+                            <button type="button" onClick={() => {
+            enqueueAnalyticsEvent("reset_chat_clicked", {
+                target: demo,
+            });
+            resetConversation(demo);
+        }} style={styles.backBtn(C.border, radius, C.text, C.scale)}>
                                 Reset Chat
                             </button>
                             <button type="button" onClick={() => {
+            enqueueAnalyticsEvent("change_demo_clicked", {
+                target: demo,
+            });
+            enqueuePageSummary("change_demo");
+            void flushAnalyticsEvents({ useBeacon: true });
             stopAll();
             onExitChat?.();
         }} style={styles.backBtn(C.border, radius, C.text, C.scale)}>
@@ -1371,7 +1642,12 @@ export default function InflowChatDemo(props) {
                     : "This conversation has ended. If you'd like a personalized demo, contact us."}
                                     </div>
                                     <a href={contactHref ||
-                "https://inflowai.net/#contact-us"} style={styles.outcomeBtn(lastQualSignal, C.scale)}>
+                "https://inflowai.net/#contact-us"} style={styles.outcomeBtn(lastQualSignal, C.scale)} onClick={() => {
+                enqueueAnalyticsEvent("contact_clicked", {
+                    target: lastQualSignal,
+                });
+                void flushAnalyticsEvents({ useBeacon: true });
+            }}>
                                         Contact us
                                     </a>
                                 </div>
@@ -1380,6 +1656,9 @@ export default function InflowChatDemo(props) {
 
                     {showJump && (<div style={styles.jumpWrap}>
                             <button style={styles.jumpBtn(C.border, C.text, C.scale)} onClick={() => {
+                enqueueAnalyticsEvent("jump_latest_clicked", {
+                    target: demo,
+                });
                 scrollToBottom();
                 window.setTimeout(() => inputRef.current?.focus(), 0);
             }}>
@@ -1405,7 +1684,15 @@ export default function InflowChatDemo(props) {
                         : i % 3 === 1
                             ? "rgba(170,140,255,0.18)"
                             : "rgba(140,200,255,0.18)",
-                }} onClick={() => sendPreset(s)}>
+                }} onClick={() => {
+                    enqueueAnalyticsEvent("starter_clicked", {
+                        target: `starter_${i + 1}`,
+                        meta: {
+                            text_length: s.length,
+                        },
+                    });
+                    sendPreset(s);
+                }}>
                                             {s}
                                         </button>))}
                                 </div>
