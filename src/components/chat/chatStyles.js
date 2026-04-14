@@ -130,6 +130,13 @@ export const styles = {
         display: "inline-flex",
         alignItems: "center",
     },
+    headerActions: {
+        justifySelf: "end",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        flexWrap: "wrap",
+    },
     brandRow: {
         display: "flex",
         alignItems: "center",

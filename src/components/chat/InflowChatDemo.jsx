@@ -30,6 +30,120 @@ function getInitialMessages(demoKey) {
     return [{ id: uid(), role: "system", text: DEMO_CATALOG[demoKey].intro }]
 }
 
+const DEMO_SESSION_STORAGE_KEY = "inflow_demo_sessions_v1"
+
+function normalizeStoredId(value) {
+    const trimmed = typeof value === "string" ? value.trim() : ""
+    return trimmed || undefined
+}
+
+function normalizeLatestIds(raw) {
+    if (!isPlainObject(raw)) {
+        return {}
+    }
+
+    const normalized = {}
+    for (const [key, value] of Object.entries(raw)) {
+        const nextValue = normalizeStoredId(value)
+        if (nextValue) {
+            normalized[key] = nextValue
+        }
+    }
+    return normalized
+}
+
+function normalizeStoredMessage(raw) {
+    if (!isPlainObject(raw) || typeof raw.role !== "string") {
+        return null
+    }
+
+    return {
+        ...raw,
+        id: typeof raw.id === "string" && raw.id.trim() ? raw.id : uid(),
+        role: raw.role,
+        text: typeof raw.text === "string" ? raw.text : "",
+    }
+}
+
+function readDemoSessionMap() {
+    if (typeof window === "undefined") {
+        return {}
+    }
+
+    try {
+        const raw = window.localStorage.getItem(DEMO_SESSION_STORAGE_KEY)
+        if (!raw) {
+            return {}
+        }
+        const parsed = JSON.parse(raw)
+        return isPlainObject(parsed) ? parsed : {}
+    } catch {
+        return {}
+    }
+}
+
+function writeDemoSessionMap(sessions) {
+    if (typeof window === "undefined") {
+        return
+    }
+
+    try {
+        if (!sessions || Object.keys(sessions).length === 0) {
+            window.localStorage.removeItem(DEMO_SESSION_STORAGE_KEY)
+            return
+        }
+        window.localStorage.setItem(DEMO_SESSION_STORAGE_KEY, JSON.stringify(sessions))
+    } catch { }
+}
+
+function getStoredDemoSession(demoKey) {
+    if (!demoKey) {
+        return null
+    }
+
+    const sessions = readDemoSessionMap()
+    const rawSession = sessions[demoKey]
+    if (!isPlainObject(rawSession)) {
+        return null
+    }
+
+    const storedMessages = Array.isArray(rawSession.messages)
+        ? rawSession.messages.map(normalizeStoredMessage).filter(Boolean)
+        : []
+
+    return {
+        messages: storedMessages.length > 0 ? storedMessages : getInitialMessages(demoKey),
+        latestIds: normalizeLatestIds(rawSession.latestIds),
+    }
+}
+
+function persistDemoSession(demoKey, session) {
+    if (!demoKey) {
+        return
+    }
+
+    const sessions = readDemoSessionMap()
+    sessions[demoKey] = {
+        messages: Array.isArray(session?.messages) ? session.messages : getInitialMessages(demoKey),
+        latestIds: normalizeLatestIds(session?.latestIds),
+        savedAt: new Date().toISOString(),
+    }
+    writeDemoSessionMap(sessions)
+}
+
+function clearStoredDemoSession(demoKey) {
+    if (!demoKey) {
+        return
+    }
+
+    const sessions = readDemoSessionMap()
+    if (!(demoKey in sessions)) {
+        return
+    }
+    delete sessions[demoKey]
+    writeDemoSessionMap(sessions)
+}
+
 function isPlainObject(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value)
 }
@@ -239,7 +353,8 @@ export default function InflowChatDemo(props) {
         scale: clamp(textScale || 1.0, 0.9, 1.25),
     }), [accent, bg, surface, border, text, muted, fontFamily, textScale]);
     const demo = demoKey || null;
-    const [messages, setMessages] = React.useState(() => getInitialMessages(demo));
+    const initialSessionRef = React.useRef(getStoredDemoSession(demo));
+    const [messages, setMessages] = React.useState(() => initialSessionRef.current?.messages ?? getInitialMessages(demo));
     const [input, setInput] = React.useState("");
     const [isThinking, setIsThinking] = React.useState(false);
     const [isTyping, setIsTyping] = React.useState(false);
@@ -261,7 +376,7 @@ export default function InflowChatDemo(props) {
             return false;
         }
     });
-    const [latestIds, setLatestIds] = React.useState({});
+    const [latestIds, setLatestIds] = React.useState(() => initialSessionRef.current?.latestIds ?? {});
     const scrollerRef = React.useRef(null);
     const inputRef = React.useRef(null);
     const sendingRef = React.useRef(false);
@@ -440,29 +555,20 @@ export default function InflowChatDemo(props) {
         const trimmed = (v || "").trim();
         return trimmed || undefined;
     }, []);
-    const getStoredThreadIds = React.useCallback(() => {
-        try {
-            return {
-                lead_id: normalizeId(window.localStorage.getItem(LEAD_ID_KEY)),
-                conversation_id: normalizeId(window.localStorage.getItem(CONVERSATION_ID_KEY)),
-            };
-        }
-        catch {
-            return { lead_id: undefined, conversation_id: undefined };
-        }
-    }, [normalizeId]);
-    const clearStoredThreadIds = React.useCallback(() => {
+    const clearLegacyThreadIds = React.useCallback(() => {
         try {
             window.localStorage.removeItem(LEAD_ID_KEY);
             window.localStorage.removeItem(CONVERSATION_ID_KEY);
         }
         catch { }
-        setLatestIds((prev) => ({
-            ...prev,
-            lead_id: undefined,
-            conversation_id: undefined,
-        }));
     }, []);
+    const currentThreadIds = React.useMemo(() => ({
+        lead_id: normalizeId(latestIds.lead_id),
+        conversation_id: normalizeId(latestIds.conversation_id),
+    }), [latestIds, normalizeId]);
+    React.useEffect(() => {
+        clearLegacyThreadIds()
+    }, [clearLegacyThreadIds]);
     React.useEffect(() => {
         const onResize = () => {
             const viewport = getViewportSize();
@@ -473,21 +579,24 @@ export default function InflowChatDemo(props) {
     }, []);
     React.useEffect(() => {
         stopAll();
-        clearStoredThreadIds();
         setInput("");
-        setMessages(getInitialMessages(demo));
         setThinkingNote("Connecting to live demo runtime");
         setShowJump(false);
         setHoveredCard(null);
         if (demo) {
+            const storedSession = getStoredDemoSession(demo)
+            setMessages(storedSession?.messages ?? getInitialMessages(demo))
+            setLatestIds(storedSession?.latestIds ?? {})
             window.setTimeout(() => inputRef.current?.focus(), 50);
             return;
         }
+        setMessages(getInitialMessages(demo));
+        setLatestIds({});
         window.setTimeout(() => window.scrollTo({
             top: 0,
             behavior: "smooth",
         }), 0);
-    }, [clearStoredThreadIds, demo, stopAll]);
+    }, [demo, stopAll]);
     // Enter-to-send reliability in Framer: handle Enter at window level when input is focused.
     React.useEffect(() => {
         if (!demo)
@@ -559,15 +668,14 @@ export default function InflowChatDemo(props) {
         return () => window.clearTimeout(t);
     }, [demo]);
     React.useEffect(() => {
-        setLatestIds((prev) => {
-            const stored = getStoredThreadIds();
-            return {
-                ...prev,
-                lead_id: stored.lead_id,
-                conversation_id: stored.conversation_id,
-            };
-        });
-    }, [getStoredThreadIds]);
+        if (!demo) {
+            return;
+        }
+        const persistTimer = window.setTimeout(() => {
+            persistDemoSession(demo, { messages, latestIds });
+        }, 120);
+        return () => window.clearTimeout(persistTimer);
+    }, [demo, latestIds, messages]);
     React.useEffect(() => {
         try {
             window.localStorage.setItem(DEVTEST_ENABLED_KEY, devTestEnabled ? "1" : "0");
@@ -578,11 +686,13 @@ export default function InflowChatDemo(props) {
         if (!nextDemo)
             return;
         stopAll();
-        clearStoredThreadIds();
+        clearStoredDemoSession(nextDemo);
         setInput("");
+        setLatestIds({});
         setMessages(getInitialMessages(nextDemo));
         setThinkingNote("Connecting to live demo runtime");
         setShowJump(false);
+        setHoveredCard(null);
         window.setTimeout(() => inputRef.current?.focus(), 50);
     }
     function getMockResponse(userText) {
@@ -832,17 +942,16 @@ export default function InflowChatDemo(props) {
             }, clamp(timeoutMs, 2000, 600000));
         }
         try {
-            const storedIds = getStoredThreadIds();
             const requestHeaders = {
                 "Content-Type": "application/json",
                 "X-Inflow-Stream": "events-v1",
             };
-            if (storedIds.lead_id) {
-                requestHeaders["X-Inflow-Lead-Id"] = storedIds.lead_id;
+            if (currentThreadIds.lead_id) {
+                requestHeaders["X-Inflow-Lead-Id"] = currentThreadIds.lead_id;
             }
-            if (storedIds.conversation_id) {
+            if (currentThreadIds.conversation_id) {
                 requestHeaders["X-Inflow-Conversation-Id"] =
-                    storedIds.conversation_id;
+                    currentThreadIds.conversation_id;
             }
             const res = await fetch(apiUrl, {
                 method: "POST",
@@ -860,15 +969,6 @@ export default function InflowChatDemo(props) {
                 conversation_id: normalizeId(res.headers.get("X-Inflow-Conversation-Id")),
                 run_id: normalizeId(res.headers.get("X-Inflow-Run-Id")),
             };
-            try {
-                if (debug.lead_id) {
-                    window.localStorage.setItem(LEAD_ID_KEY, debug.lead_id);
-                }
-                if (debug.conversation_id) {
-                    window.localStorage.setItem(CONVERSATION_ID_KEY, debug.conversation_id);
-                }
-            }
-            catch { }
             setLatestIds(debug);
             const contentType = (res.headers.get("Content-Type") || "").toLowerCase();
 
@@ -1191,12 +1291,17 @@ export default function InflowChatDemo(props) {
                             </div>
                         </div>
 
-                        <button type="button" onClick={() => {
+                        <div style={styles.headerActions}>
+                            <button type="button" onClick={() => resetConversation(demo)} style={styles.backBtn(C.border, radius, C.text, C.scale)}>
+                                Reset Chat
+                            </button>
+                            <button type="button" onClick={() => {
             stopAll();
             onExitChat?.();
         }} style={styles.backBtn(C.border, radius, C.text, C.scale)}>
-                            Change
-                        </button>
+                                Change
+                            </button>
+                        </div>
                     </div>
                 </div>
 
