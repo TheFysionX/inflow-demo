@@ -1193,6 +1193,8 @@ export default function InflowChatDemo(props) {
                 let buffer = "";
                 let finalData = null;
                 let streamError = "";
+                let lastProgressLabel = "";
+                let shouldStopReading = false;
 
                 while (true) {
                     const { done, value } = await reader.read();
@@ -1206,13 +1208,18 @@ export default function InflowChatDemo(props) {
                             const event = parseMaybeJson(line);
                             if (isPlainObject(event) && event.type === "progress") {
                                 const label = typeof event.label === "string" ? event.label.trim() : "";
-                                if (label) {
+                                if (label && label !== lastProgressLabel) {
                                     sawLiveProgress = true;
+                                    lastProgressLabel = label;
                                     clearThinkingSequence();
                                     setThinkingNote(label);
                                 }
                             } else if (isPlainObject(event) && event.type === "result") {
                                 finalData = normalizeAssistantPayload(event.data);
+                                if (finalData?.reply) {
+                                    shouldStopReading = true;
+                                    break;
+                                }
                             } else if (isPlainObject(event) && event.type === "error") {
                                 streamError = typeof event.message === "string"
                                     ? event.message
@@ -1220,6 +1227,11 @@ export default function InflowChatDemo(props) {
                             }
                         }
                         newlineIndex = buffer.indexOf("\n");
+                    }
+
+                    if (shouldStopReading) {
+                        await reader.cancel().catch(() => {});
+                        break;
                     }
 
                     if (done) {
