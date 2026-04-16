@@ -332,36 +332,34 @@ const THINKING_FOCUS_LABELS = {
     devtest_command: "Checking test controls",
 }
 
+const THINKING_PHASE_VARIANTS = {
+    composition: [
+        "Drafting the reply",
+        "Composing the reply",
+        "Tightening the wording",
+        "Writing Shakespeare",
+    ],
+}
+
+const THINKING_PHASE_VARIANT_DELAYS_MS = [2600, 5800, 9600]
+
 function normalizeThinkingLabel(text) {
-    const label = String(text || "").trim()
-    if (!label) {
-        return ""
+    return String(text || "")
+        .replace(/\s+/g, " ")
+        .trim()
+}
+
+function getThinkingVariants(phase, seedLabel) {
+    const normalizedPhase = String(phase || "")
+        .trim()
+        .toLowerCase()
+    const baseLabel = normalizeThinkingLabel(seedLabel)
+    const variants = THINKING_PHASE_VARIANTS[normalizedPhase]
+    if (!Array.isArray(variants) || !variants.length) {
+        return baseLabel ? [baseLabel] : []
     }
 
-    const lower = label.toLowerCase()
-    if (lower.includes("connect")) {
-        return "Checking the demo state"
-    }
-    if (lower.includes("draft")) {
-        return "Choosing the next response"
-    }
-    if (lower.includes("prepare") && lower.includes("reply")) {
-        return "Choosing the next response"
-    }
-    if (lower.includes("prepare") && lower.includes("response")) {
-        return "Choosing the next response"
-    }
-    if (lower.includes("final") && lower.includes("response")) {
-        return "Writing the reply"
-    }
-    if (lower.includes("writing") || lower.includes("rendering")) {
-        return "Writing the reply"
-    }
-    if (lower.includes("compose") && lower.includes("response")) {
-        return "Writing the reply"
-    }
-
-    return label
+    return [...new Set([baseLabel, ...variants].map(normalizeThinkingLabel).filter(Boolean))]
 }
 
 function getThinkingSequence(meta) {
@@ -369,20 +367,20 @@ function getThinkingSequence(meta) {
     const nextFocus = meta?.next_focus
     const stageText =
         normalizeThinkingLabel(
-            THINKING_STAGE_LABELS[stage] || "Analyzing conversation state"
+            THINKING_STAGE_LABELS[stage] || "Reviewing conversation signals"
         )
     const focusText =
         normalizeThinkingLabel(
             THINKING_FOCUS_LABELS[nextFocus] ||
-                "Choosing the next best question"
+                "Choosing the next step"
         )
 
     return [
-        { delay: 0, text: "Reviewing the current turn" },
+        { delay: 0, text: "Reviewing the latest message" },
         { delay: 3200, text: stageText },
         { delay: 8200, text: focusText },
-        { delay: 15800, text: "Choosing the next response" },
-        { delay: 22600, text: "Writing the reply" },
+        { delay: 15800, text: "Choosing the next step" },
+        { delay: 22600, text: "Drafting the reply" },
     ]
 }
 
@@ -444,6 +442,7 @@ export default function InflowChatDemo(props) {
     const abortReasonRef = React.useRef(null);
     // timers/cancel tokens
     const thinkingTimersRef = React.useRef([]);
+    const thinkingVariantTimersRef = React.useRef([]);
     const typingCancelRef = React.useRef({
         cancelled: false,
     });
@@ -593,12 +592,67 @@ export default function InflowChatDemo(props) {
             ],
         },
     }), []);
+    const clearThinkingVariants = React.useCallback(() => {
+        thinkingVariantTimersRef.current.forEach((timerId) =>
+            window.clearTimeout(timerId)
+        );
+        thinkingVariantTimersRef.current = [];
+    }, []);
+    const scheduleThinkingVariants = React.useCallback((phase, label) => {
+        clearThinkingVariants();
+        const variants = getThinkingVariants(phase, label);
+        if (variants.length <= 1) {
+            return;
+        }
+
+        thinkingVariantTimersRef.current = THINKING_PHASE_VARIANT_DELAYS_MS
+            .slice(0, variants.length - 1)
+            .map((delay, index) =>
+                window.setTimeout(() => {
+                    const nextLabel = variants[index + 1];
+                    if (!nextLabel) {
+                        return;
+                    }
+                    setThinkingElapsedAt(Date.now());
+                    setThinkingSteps((prev) => {
+                        if (!prev.length) {
+                            return prev;
+                        }
+
+                        const last = prev[prev.length - 1];
+                        if (last.completedAt || last.phase !== phase) {
+                            return prev;
+                        }
+                        if (last.text === nextLabel) {
+                            return prev;
+                        }
+
+                        return [
+                            ...prev.slice(0, -1),
+                            {
+                                ...last,
+                                text: nextLabel,
+                            },
+                        ];
+                    });
+                }, delay)
+            );
+    }, [clearThinkingVariants]);
     const resetThinkingPipeline = React.useCallback(() => {
+        clearThinkingVariants();
         setThinkingElapsedAt(Date.now())
         setThinkingSteps([])
-    }, []);
-    const setThinkingStep = React.useCallback((text) => {
-        const label = normalizeThinkingLabel(text);
+    }, [clearThinkingVariants]);
+    const setThinkingStep = React.useCallback((stepInput) => {
+        const nextPhase =
+            stepInput && typeof stepInput === "object"
+                ? String(stepInput.phase || "").trim().toLowerCase()
+                : "";
+        const rawLabel =
+            stepInput && typeof stepInput === "object"
+                ? stepInput.label || stepInput.text
+                : stepInput;
+        const label = normalizeThinkingLabel(rawLabel);
         if (!label) {
             return;
         }
@@ -611,6 +665,7 @@ export default function InflowChatDemo(props) {
                     {
                         id: uid(),
                         text: label,
+                        phase: nextPhase,
                         startedAt: now,
                         completedAt: null,
                     },
@@ -618,7 +673,7 @@ export default function InflowChatDemo(props) {
             }
 
             const last = prev[prev.length - 1];
-            if (last.text === label) {
+            if (last.text === label && last.phase === nextPhase) {
                 return prev;
             }
 
@@ -632,13 +687,16 @@ export default function InflowChatDemo(props) {
                 {
                     id: uid(),
                     text: label,
+                    phase: nextPhase,
                     startedAt: now,
                     completedAt: null,
                 },
             ];
         });
-    }, []);
+        scheduleThinkingVariants(nextPhase, label);
+    }, [scheduleThinkingVariants]);
     const completeThinkingSteps = React.useCallback((finalLabel) => {
+        clearThinkingVariants();
         const label = normalizeThinkingLabel(finalLabel);
         const now = Date.now();
         setThinkingElapsedAt(now);
@@ -649,6 +707,7 @@ export default function InflowChatDemo(props) {
                         {
                             id: uid(),
                             text: label,
+                            phase: "",
                             startedAt: now,
                             completedAt: now,
                         },
@@ -664,6 +723,7 @@ export default function InflowChatDemo(props) {
                     {
                         id: uid(),
                         text: label,
+                        phase: "",
                         startedAt: now,
                         completedAt: now,
                     },
@@ -682,14 +742,15 @@ export default function InflowChatDemo(props) {
                 },
             ];
         });
-    }, []);
+    }, [clearThinkingVariants]);
     const clearThinkingSequence = React.useCallback(() => {
         thinkingTimersRef.current.forEach((timerId) =>
             window.clearTimeout(timerId)
         );
         thinkingTimersRef.current = [];
+        clearThinkingVariants();
         completeThinkingSteps();
-    }, [completeThinkingSteps]);
+    }, [clearThinkingVariants, completeThinkingSteps]);
     const startThinkingSequence = React.useCallback((meta) => {
         const sequence = getThinkingSequence(meta);
         clearThinkingSequence();
@@ -1389,11 +1450,12 @@ export default function InflowChatDemo(props) {
                             const event = parseMaybeJson(line);
                             if (isPlainObject(event) && event.type === "progress") {
                                 const label = typeof event.label === "string" ? event.label.trim() : "";
+                                const phase = typeof event.phase === "string" ? event.phase.trim() : "";
                                 if (label && label !== lastProgressLabel) {
                                     sawLiveProgress = true;
                                     lastProgressLabel = label;
                                     clearThinkingSequence();
-                                    setThinkingStep(label);
+                                    setThinkingStep({ label, phase });
                                 }
                             } else if (isPlainObject(event) && event.type === "result") {
                                 finalData = normalizeAssistantPayload(event.data);
@@ -1457,7 +1519,7 @@ export default function InflowChatDemo(props) {
         }
         finally {
             if (!sawLiveProgress) {
-                setThinkingStep("Finalizing the response");
+                setThinkingStep({ label: "Sending the reply", phase: "finalizing" });
             }
             if (timeout)
                 window.clearTimeout(timeout);
