@@ -304,31 +304,36 @@ function getApiErrorMessage(payload, status) {
 }
 
 const THINKING_STAGE_LABELS = {
-    opening: "Reviewing conversation context",
-    discovery: "Reviewing discovery signals",
-    mid_qualification: "Checking qualification signals",
-    closing_prep: "Preparing the close path",
-    closing: "Checking outcome state",
-    handoff: "Reviewing handoff conditions",
+    opening: "Working through the opening",
+    current: "Checking current context",
+    desired: "Checking the goal path",
+    objection: "Working through the blocker",
+    book: "Working through booking",
     devtest: "Preparing test response",
 }
 
 const THINKING_FOCUS_LABELS = {
-    entry_intent: "Clarifying user intent",
-    baseline_experience: "Checking experience level",
-    primary_goal: "Reviewing goal signals",
-    baseline_routine: "Reviewing current routine",
-    main_constraint: "Checking constraints",
-    change_target: "Clarifying the target",
-    success_definition: "Defining success",
-    friction_point: "Looking at friction points",
-    budget_fit: "Checking budget fit",
-    schedule_lock: "Checking schedule fit",
-    pain_clarity: "Clarifying the main pain point",
-    human_handoff: "Reviewing handoff conditions",
-    post_qualification_followup: "Preparing the follow-up",
-    manual_review: "Checking qualification state",
-    contact_offer: "Preparing the contact handoff",
+    trading_interest_reason: "Clarifying what pulled them into trading",
+    work_role: "Checking work or school context",
+    life_context: "Checking day to day context",
+    experience_level: "Checking experience level",
+    problem_duration: "Checking how long this has been on their mind",
+    goal_type: "Reviewing the main outcome",
+    target_outcome_value: "Checking the target number",
+    current_gap_to_target: "Checking the gap to the goal",
+    why_now: "Checking why now",
+    objection_detail: "Checking the blocker",
+    qualification_capital_detail: "Checking readiness",
+    booking_progress: "Working through the next booking step",
+    booking_intent: "Checking booking intent",
+    booking_commitment: "Checking call commitment",
+    booking_day: "Checking day options",
+    booking_day_choice: "Checking day options",
+    booking_timezone: "Checking the timezone",
+    booking_exact_time: "Checking the exact time",
+    booking_confirmed_time: "Confirming the time",
+    booking_confirm_time: "Confirming the time",
+    booking_attendance: "Checking attendance",
     devtest_command: "Checking test controls",
 }
 
@@ -339,6 +344,11 @@ const THINKING_PHASE_VARIANTS = {
         "Tightening the wording",
         "Writing Shakespeare",
     ],
+    finalizing: [
+        "Sending the reply",
+        "Posting the reply",
+        "Putting a bow on it",
+    ],
 }
 
 const THINKING_PHASE_VARIANT_DELAYS_MS = [2600, 5800, 9600]
@@ -347,6 +357,45 @@ function normalizeThinkingLabel(text) {
     return String(text || "")
         .replace(/\s+/g, " ")
         .trim()
+}
+
+function humanizeThinkingToken(value) {
+    const normalized = normalizeThinkingLabel(value).replace(/[_/]+/g, " ")
+    if (!normalized) {
+        return ""
+    }
+
+    return normalized.replace(/\b\w/g, (character) => character.toUpperCase())
+}
+
+function buildStageThinkingLabel(stage) {
+    const normalizedStage = String(stage || "")
+        .trim()
+        .toLowerCase()
+    const mapped = THINKING_STAGE_LABELS[normalizedStage]
+    if (mapped) {
+        return mapped
+    }
+
+    const humanized = humanizeThinkingToken(normalizedStage)
+    return humanized
+        ? `Working through ${humanized.toLowerCase()}`
+        : "Reviewing conversation signals"
+}
+
+function buildFocusThinkingLabel(nextFocus) {
+    const normalizedFocus = String(nextFocus || "")
+        .trim()
+        .toLowerCase()
+    const mapped = THINKING_FOCUS_LABELS[normalizedFocus]
+    if (mapped) {
+        return mapped
+    }
+
+    const humanized = humanizeThinkingToken(normalizedFocus)
+    return humanized
+        ? `Checking ${humanized.toLowerCase()}`
+        : "Choosing the next step"
 }
 
 function getThinkingVariants(phase, seedLabel) {
@@ -365,15 +414,8 @@ function getThinkingVariants(phase, seedLabel) {
 function getThinkingSequence(meta) {
     const stage = meta?.stage || meta?.filled?.last_stage
     const nextFocus = meta?.next_focus
-    const stageText =
-        normalizeThinkingLabel(
-            THINKING_STAGE_LABELS[stage] || "Reviewing conversation signals"
-        )
-    const focusText =
-        normalizeThinkingLabel(
-            THINKING_FOCUS_LABELS[nextFocus] ||
-                "Choosing the next step"
-        )
+    const stageText = normalizeThinkingLabel(buildStageThinkingLabel(stage))
+    const focusText = normalizeThinkingLabel(buildFocusThinkingLabel(nextFocus))
 
     return [
         { delay: 0, text: "Reviewing the latest message" },
