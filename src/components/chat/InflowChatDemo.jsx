@@ -332,21 +332,69 @@ const THINKING_FOCUS_LABELS = {
     devtest_command: "Checking test controls",
 }
 
+function normalizeThinkingLabel(text) {
+    const label = String(text || "").trim()
+    if (!label) {
+        return ""
+    }
+
+    const lower = label.toLowerCase()
+    if (lower.includes("connect")) {
+        return "Checking the demo state"
+    }
+    if (lower.includes("draft")) {
+        return "Choosing the next response"
+    }
+    if (lower.includes("prepare") && lower.includes("reply")) {
+        return "Choosing the next response"
+    }
+    if (lower.includes("prepare") && lower.includes("response")) {
+        return "Choosing the next response"
+    }
+    if (lower.includes("final") && lower.includes("response")) {
+        return "Writing the reply"
+    }
+    if (lower.includes("writing") || lower.includes("rendering")) {
+        return "Writing the reply"
+    }
+    if (lower.includes("compose") && lower.includes("response")) {
+        return "Writing the reply"
+    }
+
+    return label
+}
+
 function getThinkingSequence(meta) {
     const stage = meta?.stage || meta?.filled?.last_stage
     const nextFocus = meta?.next_focus
     const stageText =
-        THINKING_STAGE_LABELS[stage] || "Analyzing conversation state"
+        normalizeThinkingLabel(
+            THINKING_STAGE_LABELS[stage] || "Analyzing conversation state"
+        )
     const focusText =
-        THINKING_FOCUS_LABELS[nextFocus] || "Choosing the next best question"
+        normalizeThinkingLabel(
+            THINKING_FOCUS_LABELS[nextFocus] ||
+                "Choosing the next best question"
+        )
 
     return [
-        { delay: 0, text: "Connecting to live demo runtime" },
+        { delay: 0, text: "Reviewing the current turn" },
         { delay: 3200, text: stageText },
         { delay: 8200, text: focusText },
-        { delay: 15800, text: "Preparing the reply" },
-        { delay: 22600, text: "Finalizing the response" },
+        { delay: 15800, text: "Choosing the next response" },
+        { delay: 22600, text: "Writing the reply" },
     ]
+}
+
+function formatThinkingDurationLabel(startedAt, completedAt, now) {
+    if (!startedAt) {
+        return "1s"
+    }
+
+    const endTime = completedAt || now || Date.now()
+    const elapsedMs = Math.max(1, endTime - startedAt)
+    const seconds = Math.max(1, Math.ceil(elapsedMs / 1000))
+    return `${seconds}s`
 }
 
 export default function InflowChatDemo(props) {
@@ -372,9 +420,8 @@ export default function InflowChatDemo(props) {
     const [isThinking, setIsThinking] = React.useState(false);
     const [isTyping, setIsTyping] = React.useState(false);
     const [showJump, setShowJump] = React.useState(false);
-    const [thinkingNote, setThinkingNote] = React.useState(
-        "Connecting to live demo runtime"
-    );
+    const [thinkingSteps, setThinkingSteps] = React.useState([]);
+    const [thinkingElapsedAt, setThinkingElapsedAt] = React.useState(() => Date.now());
     const [cardsHoverReady, setCardsHoverReady] = React.useState(false);
     const [hoveredCard, setHoveredCard] = React.useState(null);
     const [pickerLayout, setPickerLayout] = React.useState(() => {
@@ -546,26 +593,118 @@ export default function InflowChatDemo(props) {
             ],
         },
     }), []);
+    const resetThinkingPipeline = React.useCallback(() => {
+        setThinkingElapsedAt(Date.now())
+        setThinkingSteps([])
+    }, []);
+    const setThinkingStep = React.useCallback((text) => {
+        const label = normalizeThinkingLabel(text);
+        if (!label) {
+            return;
+        }
+
+        const now = Date.now();
+        setThinkingElapsedAt(now);
+        setThinkingSteps((prev) => {
+            if (!prev.length) {
+                return [
+                    {
+                        id: uid(),
+                        text: label,
+                        startedAt: now,
+                        completedAt: null,
+                    },
+                ];
+            }
+
+            const last = prev[prev.length - 1];
+            if (last.text === label) {
+                return prev;
+            }
+
+            const completedLast = last.completedAt
+                ? last
+                : { ...last, completedAt: now };
+
+            return [
+                ...prev.slice(0, -1),
+                completedLast,
+                {
+                    id: uid(),
+                    text: label,
+                    startedAt: now,
+                    completedAt: null,
+                },
+            ];
+        });
+    }, []);
+    const completeThinkingSteps = React.useCallback((finalLabel) => {
+        const label = normalizeThinkingLabel(finalLabel);
+        const now = Date.now();
+        setThinkingElapsedAt(now);
+        setThinkingSteps((prev) => {
+            if (!prev.length) {
+                return label
+                    ? [
+                        {
+                            id: uid(),
+                            text: label,
+                            startedAt: now,
+                            completedAt: now,
+                        },
+                    ]
+                    : prev;
+            }
+
+            const last = prev[prev.length - 1];
+            if (label && last.text !== label) {
+                return [
+                    ...prev.slice(0, -1),
+                    last.completedAt ? last : { ...last, completedAt: now },
+                    {
+                        id: uid(),
+                        text: label,
+                        startedAt: now,
+                        completedAt: now,
+                    },
+                ];
+            }
+
+            if (last.completedAt) {
+                return prev;
+            }
+
+            return [
+                ...prev.slice(0, -1),
+                {
+                    ...last,
+                    completedAt: now,
+                },
+            ];
+        });
+    }, []);
     const clearThinkingSequence = React.useCallback(() => {
         thinkingTimersRef.current.forEach((timerId) =>
             window.clearTimeout(timerId)
         );
         thinkingTimersRef.current = [];
-    }, []);
+        completeThinkingSteps();
+    }, [completeThinkingSteps]);
     const startThinkingSequence = React.useCallback((meta) => {
         const sequence = getThinkingSequence(meta);
         clearThinkingSequence();
+        resetThinkingPipeline();
         if (!sequence.length) {
-            setThinkingNote("Reviewing conversation context");
+            setThinkingStep("Reviewing conversation context");
             return;
         }
-        setThinkingNote(sequence[0].text);
+        setThinkingStep(sequence[0].text);
         thinkingTimersRef.current = sequence.slice(1).map((item) =>
             window.setTimeout(() => {
-                setThinkingNote(item.text);
+                setThinkingStep(item.text);
             }, item.delay)
         );
-    }, [clearThinkingSequence]);
+    }, [clearThinkingSequence, resetThinkingPipeline, setThinkingStep]);
     const stopAll = React.useCallback(() => {
         clearThinkingSequence();
         if (abortRef.current)
@@ -575,12 +714,25 @@ export default function InflowChatDemo(props) {
         setIsThinking(false);
         setIsTyping(false);
     }, [clearThinkingSequence]);
-    const scrollToBottom = React.useCallback(() => {
+    const scrollToBottom = React.useCallback((behavior = "auto") => {
         const el = scrollerRef.current;
         if (!el)
             return;
+        if (typeof el.scrollTo === "function") {
+            el.scrollTo({
+                top: el.scrollHeight,
+                behavior,
+            });
+            return;
+        }
         el.scrollTop = el.scrollHeight;
     }, []);
+    const keepComposerInView = React.useCallback(() => {
+        scrollToBottom("smooth");
+        window.setTimeout(() => {
+            scrollToBottom("auto");
+        }, 220);
+    }, [scrollToBottom]);
     const normalizeId = React.useCallback((v) => {
         const trimmed = (v || "").trim();
         return trimmed || undefined;
@@ -722,9 +874,21 @@ export default function InflowChatDemo(props) {
         scheduleAnalyticsFlush(240)
     }, [enqueueAnalyticsEvent, scheduleAnalyticsFlush]);
     React.useEffect(() => {
+        if (!isThinking) {
+            return
+        }
+
+        setThinkingElapsedAt(Date.now())
+        const timerId = window.setInterval(() => {
+            setThinkingElapsedAt(Date.now())
+        }, 1000)
+
+        return () => window.clearInterval(timerId)
+    }, [isThinking]);
+    React.useEffect(() => {
         stopAll();
         setInput("");
-        setThinkingNote("Connecting to live demo runtime");
+        resetThinkingPipeline();
         setShowJump(false);
         setHoveredCard(null);
         if (demo) {
@@ -740,7 +904,7 @@ export default function InflowChatDemo(props) {
             top: 0,
             behavior: "smooth",
         }), 0);
-    }, [demo, stopAll]);
+    }, [demo, resetThinkingPipeline, stopAll]);
     React.useEffect(() => {
         if (!demo) {
             return
@@ -901,11 +1065,28 @@ export default function InflowChatDemo(props) {
         setInput("");
         setLatestIds({});
         setMessages(getInitialMessages(nextDemo));
-        setThinkingNote("Connecting to live demo runtime");
+        resetThinkingPipeline();
         setShowJump(false);
         setHoveredCard(null);
         window.setTimeout(() => inputRef.current?.focus(), 50);
     }
+    React.useEffect(() => {
+        if (!demo) {
+            return;
+        }
+
+        const handleExternalReset = () => {
+            enqueueAnalyticsEvent("reset_chat_clicked", {
+                target: demo,
+            });
+            resetConversation(demo);
+        };
+
+        window.addEventListener("inflow-demo-reset-chat", handleExternalReset);
+        return () => {
+            window.removeEventListener("inflow-demo-reset-chat", handleExternalReset);
+        };
+    }, [demo, enqueueAnalyticsEvent]);
     function getMockResponse(userText) {
         if (!demo)
             return { reply: "Pick a demo to start." };
@@ -1212,7 +1393,7 @@ export default function InflowChatDemo(props) {
                                     sawLiveProgress = true;
                                     lastProgressLabel = label;
                                     clearThinkingSequence();
-                                    setThinkingNote(label);
+                                    setThinkingStep(label);
                                 }
                             } else if (isPlainObject(event) && event.type === "result") {
                                 finalData = normalizeAssistantPayload(event.data);
@@ -1276,7 +1457,7 @@ export default function InflowChatDemo(props) {
         }
         finally {
             if (!sawLiveProgress) {
-                setThinkingNote("Finalizing the response");
+                setThinkingStep("Finalizing the response");
             }
             if (timeout)
                 window.clearTimeout(timeout);
@@ -1413,14 +1594,6 @@ export default function InflowChatDemo(props) {
     }
     // Global capture stops Framer canvas from stealing keys/focus.
     const stopCapture = (e) => e.stopPropagation();
-    // Which chat message is the last one? (System pill doesn't count.)
-    const lastChatIdx = React.useMemo(() => {
-        for (let i = messages.length - 1; i >= 0; i--) {
-            if (messages[i].role !== "system")
-                return i;
-        }
-        return -1;
-    }, [messages]);
     const outcomeTime = React.useMemo(() => {
         const filled = lastAssistantMeta?.filled;
         if (!filled)
@@ -1454,7 +1627,7 @@ export default function InflowChatDemo(props) {
                                 INFLOW AI
                             </div>
                             <div style={styles.landingSubtitle(C.muted, C.scale)}>
-                                The future of sales
+                                Product demo
                             </div>
                         </div>
                     </div>
@@ -1528,7 +1701,7 @@ export default function InflowChatDemo(props) {
                     </div>
 
                     <div style={styles.footer(C.muted, C.scale)}>
-                        Inflow AI Demo Service. Mocked programs and situations.
+                        Some scenarios are simulated for review.
                     </div>
                 </div>
             </div>);
@@ -1536,6 +1709,7 @@ export default function InflowChatDemo(props) {
     const demoInfo = getDemoMeta(demo);
     const hasChatContent = messages.some((m) => m.role !== "system");
     const starters = [starter1, starter2, starter3].filter((s) => (s || "").trim());
+    const visibleThinkingSteps = thinkingSteps.slice(-3);
     return (<div className="inflowChatDemoRoot" style={styles.root(outerPadding, C.fontFamily)} onKeyDownCapture={stopCapture} onKeyUpCapture={stopCapture} onPointerDownCapture={stopCapture} onMouseDownCapture={stopCapture}>
             <StyleTag />
             <button
@@ -1548,47 +1722,11 @@ export default function InflowChatDemo(props) {
             </button>
 
             <div style={styles.shell(radius)}>
-                <div style={styles.chatTopSpacer}/>
-                <div style={styles.topBar()}>
-                    <div style={styles.headerRow}>
-                        <div style={styles.demoLeft}>
-                            <div style={styles.dot(C.accent)}/>
-                            <div style={styles.demoLabel(C.text, C.scale)}>
-                                Demo
-                            </div>
-                        </div>
-
-                        <div style={styles.headerCenter}>
-                            <div style={styles.title(C.text, C.scale)}>
-                                {demoInfo.title}
-                            </div>
-                        </div>
-
-                        <div style={styles.headerActions}>
-                            <button type="button" onClick={() => {
-            enqueueAnalyticsEvent("reset_chat_clicked", {
-                target: demo,
-            });
-            resetConversation(demo);
-        }} style={styles.backBtn(C.border, radius, C.text, C.scale)}>
-                                Reset Chat
-                            </button>
-                            <button type="button" onClick={() => {
-            enqueueAnalyticsEvent("change_demo_clicked", {
-                target: demo,
-            });
-            enqueuePageSummary("change_demo");
-            void flushAnalyticsEvents({ useBeacon: true });
-            stopAll();
-            onExitChat?.();
-        }} style={styles.backBtn(C.border, radius, C.text, C.scale)}>
-                                Change
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div ref={scrollerRef} style={styles.scroller}>
+                <div
+                    ref={scrollerRef}
+                    style={styles.scroller}
+                    className="chat-scroller"
+                >
                     {!hasChatContent && (<div style={styles.watermarkWrap}>
                             <div style={styles.watermarkInner}>
                                 {watermarkImageUrl ? (<img src={watermarkImageUrl} alt="Inflow AI" style={styles.watermarkImg} draggable={false}/>) : (<div style={styles.watermarkFallback}>
@@ -1605,32 +1743,48 @@ export default function InflowChatDemo(props) {
             if (hasChatContent && m.role === "system") {
                 return null;
             }
-            const isChat = m.role !== "system";
-            const isLastChat = isChat && idx === lastChatIdx;
-            const showDivider = isChat && (!isLastChat || isThinking);
             return (<React.Fragment key={m.id}>
                                     <MessageBubble msg={m} border={C.border} radius={radius} text={C.text} muted={C.muted} avatarSize={avatarSize} accent={C.accent} assistantAvatarUrl={assistantAvatarUrl || watermarkImageUrl} scale={C.scale} devTestEnabled={devTestEnabled} onRetry={() => {
                     if (demo)
                         resetConversation(demo);
-                }}/>
-                                    {showDivider && (<div style={styles.msgDivider(C.border, avatarSize * 2)}/>)}
+                }} onDetailsExpand={keepComposerInView}/>
                                 </React.Fragment>);
         })}
 
-                        {isThinking && (<div style={styles.msgRow(avatarSize * 2)}>
-                                <div style={styles.avatarCol}>
+                        {isThinking && (<div style={styles.msgRow(false)}>
+                                <div style={styles.avatarCol(false)}>
                                     <BotBlobAvatar mode="thinking" size={avatarSize * 2} border={C.border}/>
                                 </div>
-                                <div style={styles.msgCol}>
-                                    <div style={styles.thinkingLine(C.muted, C.scale)}>
-                                        <span key={thinkingNote} style={styles.thinkingNote}>
-                                            {thinkingNote}
-                                        </span>
-                                        <span style={styles.dotWrap}>
-                                            <span style={styles.dot1}>.</span>
-                                            <span style={styles.dot2}>.</span>
-                                            <span style={styles.dot3}>.</span>
-                                        </span>
+                                <div style={styles.msgCol(false)}>
+                                    <div style={styles.thinkingPipeline()}>
+                                        {visibleThinkingSteps.map((step, stepIndex) => {
+                const isLastStep = stepIndex === visibleThinkingSteps.length - 1;
+                const isActiveStep = isLastStep && !step.completedAt;
+                const durationLabel = formatThinkingDurationLabel(step.startedAt, step.completedAt, thinkingElapsedAt);
+                return (<div key={step.id} style={styles.thinkingStepRow()}>
+                                                    <div style={styles.thinkingStepMarkerCol()}>
+                                                        <div style={styles.thinkingStepMarker(isActiveStep, C.accent, C.border)}>
+                                                            {isActiveStep && (<span style={styles.thinkingStepPulse(C.accent)}/>)}
+                                                        </div>
+                                                        {!isLastStep && (<div style={styles.thinkingStepConnector(C.accent, C.border)}/>)}
+                                                    </div>
+                                                    <div style={styles.thinkingStepContent()}>
+                                                        <div key={`${step.id}-title-${isActiveStep ? "active" : "done"}`} style={styles.thinkingStepTitle(C.text, C.scale, isActiveStep)}>
+                                                            {step.text}
+                                                        </div>
+                                                        <div key={`${step.id}-meta-${isActiveStep ? "active" : "done"}`} style={styles.thinkingStepMeta(C.muted, C.scale, isActiveStep)}>
+                                                            {isActiveStep ? (<>
+                                                                    Thinking for {durationLabel}
+                                                                    <span style={styles.thinkingStepDots()}>
+                                                                        <span style={styles.dot1}>.</span>
+                                                                        <span style={styles.dot2}>.</span>
+                                                                        <span style={styles.dot3}>.</span>
+                                                                    </span>
+                                                                </>) : `Thought for ${durationLabel}`}
+                                                        </div>
+                                                    </div>
+                                                </div>);
+            })}
                                     </div>
                                 </div>
                             </div>)}

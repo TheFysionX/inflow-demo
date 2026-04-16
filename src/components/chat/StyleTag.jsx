@@ -72,6 +72,27 @@ export default function StyleTag() {
         border-color: rgba(255,255,255,0.22);
         box-shadow: 0 12px 28px rgba(0,0,0,0.25);
       }
+      .chat-scroller {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(124,92,255,0.84) rgba(255,255,255,0.05);
+      }
+      .chat-scroller::-webkit-scrollbar {
+        width: 10px;
+      }
+      .chat-scroller::-webkit-scrollbar-track {
+        background: rgba(255,255,255,0.04);
+        border-radius: 999px;
+      }
+      .chat-scroller::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        border: 2px solid rgba(36,35,35,0.95);
+        background: linear-gradient(
+          180deg,
+          rgba(124,92,255,0.92),
+          rgba(95,165,255,0.86),
+          rgba(214,136,196,0.78)
+        );
+      }
       .demoCard.is-locked {
         filter: grayscale(0.35);
       }
@@ -147,6 +168,22 @@ export default function StyleTag() {
       @keyframes detailClose {
         from { opacity: 1; transform: translateY(0); }
         to { opacity: 0; transform: translateY(-4px); }
+      }
+      @keyframes thinkingStepEnter {
+        from { opacity: 0; transform: translateY(10px) scale(0.985); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      @keyframes thinkingWordSwap {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes thinkingConnectorReveal {
+        from { opacity: 0; transform: translateX(-50%) scaleY(0.35); transform-origin: top center; }
+        to { opacity: 1; transform: translateX(-50%) scaleY(1); transform-origin: top center; }
+      }
+      @keyframes thinkingDiamondPulse {
+        0%, 100% { transform: scale(0.82); opacity: 0.72; }
+        50% { transform: scale(1.08); opacity: 1; }
       }
       @keyframes dotJump {
         0%, 80%, 100% { transform: translateY(0); opacity: 0.8; }

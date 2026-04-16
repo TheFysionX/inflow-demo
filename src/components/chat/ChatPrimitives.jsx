@@ -77,18 +77,17 @@ function compactText(value, maxLength = 140) {
     return `${normalized.slice(0, maxLength - 3).trimEnd()}...`
 }
 
-function deriveTraceCode(meta) {
-    const traceCode = String(
+function deriveTraceId(meta) {
+    const traceId = String(
         meta?.details?.d_trace || meta?.decision_trace?.trace_code || ""
     ).trim()
-    if (traceCode) {
-        return traceCode
-    }
+    return traceId
+}
 
-    const docCount = Array.isArray(meta?.decision_trace?.docs_used)
+function deriveReferencedDocCount(meta) {
+    return Array.isArray(meta?.decision_trace?.docs_used)
         ? meta.decision_trace.docs_used.length
         : 0
-    return docCount > 0 ? String(1000 + docCount * 137) : ""
 }
 
 function buildBookingLabelFromMeta(filled, details) {
@@ -142,7 +141,8 @@ function buildDetailSummary(meta) {
                       ? "Conversation ended"
                       : "Live")
         ).trim(),
-        traceCode: deriveTraceCode(meta),
+        traceId: deriveTraceId(meta),
+        referencedDocCount: deriveReferencedDocCount(meta),
         pathLabel,
         nextFocusLabel: String(
             details.next_focus_label || humanizeToken(meta?.next_focus)
@@ -171,6 +171,7 @@ export function MessageBubble(props) {
         scale,
         devTestEnabled,
         onRetry,
+        onDetailsExpand,
     } = props
     const isUser = msg.role === "user"
     const isSystem = msg.role === "system"
@@ -209,6 +210,23 @@ export function MessageBubble(props) {
 
         return () => window.clearTimeout(timer)
     }, [detailsVisible, showDetails])
+    React.useEffect(() => {
+        if (!showDetails || !detailsVisible || typeof onDetailsExpand !== "function") {
+            return
+        }
+
+        const frameId = window.requestAnimationFrame(() => {
+            onDetailsExpand()
+        })
+        const timer = window.setTimeout(() => {
+            onDetailsExpand()
+        }, 220)
+
+        return () => {
+            window.cancelAnimationFrame(frameId)
+            window.clearTimeout(timer)
+        }
+    }, [detailsVisible, onDetailsExpand, showDetails])
 
     const renderSystem = (t) => {
         const parts = t.split(/(\*\*[^*]+\*\*)/g)
@@ -236,8 +254,8 @@ export function MessageBubble(props) {
     const avatarSizeBoosted = avatarSize * 2
 
     return (
-        <div style={styles.msgRow(avatarSizeBoosted)}>
-            <div style={styles.avatarCol}>
+        <div style={styles.msgRow(isUser)}>
+            <div style={styles.avatarCol(isUser)}>
                 {isUser ? (
                     <UserAvatar size={avatarSizeBoosted} border={border} />
                 ) : assistantAvatarUrl ? (
@@ -254,10 +272,12 @@ export function MessageBubble(props) {
                     />
                 )}
             </div>
-            <div style={styles.msgCol}>
+            <div style={styles.msgCol(isUser)}>
                 {!isHandoff ? (
-                    <div style={styles.msgText(text, isUser, scale)}>
-                        {msg.text}
+                    <div style={styles.msgSurface(isUser, border)}>
+                        <div style={styles.msgText(text, isUser, scale)}>
+                            {msg.text}
+                        </div>
                     </div>
                 ) : (
                     <div style={styles.handoffMessage}>
@@ -317,13 +337,23 @@ export function MessageBubble(props) {
                                         </div>
                                     </div>
                                 )}
-                                {detailSummary.traceCode && (
+                                {detailSummary.traceId && (
                                     <div style={styles.detailRow}>
                                         <div style={styles.detailLabel}>
-                                            D-Trace
+                                            Trace ID
                                         </div>
                                         <div style={styles.detailMonoValue}>
-                                            {detailSummary.traceCode}
+                                            {detailSummary.traceId}
+                                        </div>
+                                    </div>
+                                )}
+                                {detailSummary.referencedDocCount > 0 && (
+                                    <div style={styles.detailRow}>
+                                        <div style={styles.detailLabel}>
+                                            Referenced Docs
+                                        </div>
+                                        <div style={styles.detailValue}>
+                                            {detailSummary.referencedDocCount}
                                         </div>
                                     </div>
                                 )}

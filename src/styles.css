@@ -16,14 +16,18 @@ html,
 body,
 #root {
     width: 100%;
+    height: 100%;
     min-height: 100%;
     margin: 0;
+    overflow: hidden;
 }
 
 body {
+    height: 100dvh;
     min-height: 100dvh;
     background: #242323;
     color: var(--text, #ffffff);
+    overflow: hidden;
 }
 
 button,
@@ -38,17 +42,20 @@ a {
 }
 
 .app-shell {
-    min-height: 100dvh;
+    height: 100dvh;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     padding: 18px 22px 22px;
     background: #242323;
+    overflow: hidden;
 }
 
 .site-header {
-    display: flex;
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
-    justify-content: space-between;
     gap: 16px;
     padding: 8px 2px 14px;
 }
@@ -71,22 +78,48 @@ a {
     letter-spacing: -0.02em;
 }
 
-.brand-subtitle {
-    font-size: 0.82rem;
-    color: var(--muted);
+.site-header-title {
+    justify-self: center;
+    min-width: 0;
+    padding: 0 8px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.94);
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.site-header-actions {
+    justify-self: end;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    min-width: 0;
+    flex-wrap: wrap;
 }
 
 .home-link {
+    --action-border: rgba(255, 255, 255, 0.08);
+    --action-hover-border: rgba(124, 92, 255, 0.34);
+    --action-hover-bg-start: rgba(124, 92, 255, 0.14);
+    --action-hover-bg-end: rgba(94, 144, 255, 0.1);
     display: inline-flex;
     align-items: center;
     gap: 10px;
+    appearance: none;
     padding: 11px 14px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--action-border);
     border-radius: 999px;
     background: transparent;
     color: #ffffff;
     font-size: 0.92rem;
     font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
     transition:
         transform 160ms ease,
         border-color 160ms ease,
@@ -96,12 +129,26 @@ a {
 
 .home-link:hover {
     transform: translateY(-1px);
-    border-color: rgba(124, 92, 255, 0.34);
+    border-color: var(--action-hover-border);
     background: linear-gradient(
         135deg,
-        rgba(124, 92, 255, 0.14),
-        rgba(94, 144, 255, 0.1)
+        var(--action-hover-bg-start),
+        var(--action-hover-bg-end)
     );
+}
+
+.header-action-reset {
+    --action-border: rgba(255, 120, 120, 0.18);
+    --action-hover-border: rgba(255, 120, 120, 0.4);
+    --action-hover-bg-start: rgba(255, 102, 102, 0.18);
+    --action-hover-bg-end: rgba(255, 153, 153, 0.1);
+}
+
+.header-action-change {
+    --action-border: rgba(95, 165, 255, 0.18);
+    --action-hover-border: rgba(95, 165, 255, 0.42);
+    --action-hover-bg-start: rgba(95, 165, 255, 0.18);
+    --action-hover-bg-end: rgba(124, 92, 255, 0.1);
 }
 
 .home-link-icon {
@@ -115,6 +162,7 @@ a {
     min-height: 0;
     display: flex;
     padding-top: 8px;
+    overflow: hidden;
 }
 
 .consent-shell,
@@ -122,13 +170,14 @@ a {
     flex: 1;
     min-height: 0;
     display: flex;
+    overflow: hidden;
 }
 
 .consent-shell {
     align-items: flex-start;
     position: relative;
     isolation: isolate;
-    overflow: hidden;
+    overflow: auto;
     padding-top: clamp(10px, 3vh, 34px);
 }
 
@@ -380,6 +429,8 @@ a {
     min-height: 0;
     flex: 1;
     background: transparent;
+    display: flex;
+    overflow: hidden;
 }
 
 .chat-loading {
@@ -726,17 +777,27 @@ a {
     }
 
     .site-header {
-        flex-direction: column;
-        align-items: stretch;
+        grid-template-columns: 1fr;
+        justify-items: center;
+        gap: 12px;
     }
 
-    .home-link {
+    .home-link,
+    .site-header-actions {
         justify-content: center;
     }
 
     .brand-block {
         justify-content: center;
         text-align: center;
+    }
+
+    .site-header-actions {
+        width: 100%;
+    }
+
+    .site-header-title {
+        max-width: 100%;
     }
 
     .title-animation {

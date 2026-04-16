@@ -24,31 +24,30 @@ export default function ConsentPage({ onProceed }) {
                 </React.Suspense>
 
                 <p className="consent-lead">
-                    Review the Inflow AI demo in a controlled environment
-                    before entering the chat experience.
+                    Review the Inflow AI demo in a controlled environment.
                 </p>
 
                 <div className="consent-grid">
                     <div className="consent-panel">
                         <h1>Before you continue</h1>
                         <p>
-                            This page is meant for product review and guided
-                            exploration. Some flows are mocked, some are
-                            rate-limited, and it is not intended to be treated
-                            like a public production service.
+                            This page is for product review and guided
+                            exploration. Some flows are based on mocked
+                            situations, are rate-limited, and are not intended
+                            to be treated like a public production service.
                         </p>
                         <ul className="consent-list">
                             <li>
-                                Responses may be simulated or constrained for
-                                demo purposes.
+                                Responses are based on simulated situations
+                                and/or constrained for demo purposes.
                             </li>
                             <li>
                                 Do not scrape, stress-test, attack, or attempt
                                 to bypass the demo.
                             </li>
                             <li>
-                                If you want a real walkthrough, use the contact
-                                path and we can show the live product directly.
+                                For a real walkthrough, contact us through our
+                                website for more details.
                             </li>
                         </ul>
                         <a
@@ -106,8 +105,8 @@ export default function ConsentPage({ onProceed }) {
                         </button>
 
                         <p className="consent-meta">
-                            Continuing will unlock the demo selector and the
-                            standalone chat previews.
+                            Continuing opens the demo selector and chat
+                            previews.
                         </p>
                     </div>
                 </div>

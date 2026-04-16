@@ -11,17 +11,17 @@ const DEMO_FLAVOR = {
     day_trading: {
         accentClass: "accent-trading",
         availabilityLabel: "Available",
-        metric: "Qualification-led",
+        metric: "Qualification flow",
     },
     fitness_health: {
         accentClass: "accent-fitness",
         availabilityLabel: "Locked",
-        metric: "Goal-led",
+        metric: "Goal intake",
     },
     self_improvement: {
         accentClass: "accent-self",
         availabilityLabel: "Locked",
-        metric: "Psychology-led",
+        metric: "Friction mapping",
     },
 }
 
@@ -240,8 +240,8 @@ export default function DemoSelectorGallery({
             <div className="selector-hero">
                 <h1 className="selector-title">INFLOW AI</h1>
                 <p className="selector-subtitle">
-                    Choose a demo to preview tone, flow, and qualification
-                    behavior across the current demo environments.
+                    Choose a demo to review the flow, tone, and qualification
+                    logic.
                 </p>
             </div>
 
