@@ -1,6 +1,7 @@
 export const HOME_URL = "https://inflowai.net";
 export const CONTACT_URL = "https://inflowai.net/#contact-us";
 export const CONSENT_SESSION_KEY = "inflow_demo_consent_v1";
+export const ACCESS_TERMS_PATH = "/access-terms";
 const DEFAULT_API_URL = "https://inflow-demo.theo-lupescu.workers.dev/chat";
 export const chatConfig = {
     headerTitle: "Inflow",

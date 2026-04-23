@@ -4,6 +4,8 @@ export const DEMO_ORDER = [
     "self_improvement",
 ]
 
+export const DEMO_GALLERY_PATH = "/demos"
+
 export const DEMO_CATALOG = {
     day_trading: {
         slug: "day-trading",
@@ -129,7 +131,7 @@ export function getDemoKeyFromSlug(slug) {
 
 export function getDemoPath(demoKey) {
     const demo = getDemoMeta(demoKey)
-    return demo ? `/demo/${demo.slug}` : "/demo"
+    return demo ? `${DEMO_GALLERY_PATH}/${demo.slug}` : DEMO_GALLERY_PATH
 }
 
 export function getDemoCards(config) {

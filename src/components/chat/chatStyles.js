@@ -603,7 +603,8 @@ export const styles = {
         display: "inline-flex",
         alignItems: "center",
         gap: 8,
-        transition: "filter 160ms ease",
+        transition:
+            "transform 220ms ease, filter 220ms ease, background 220ms ease, border-color 220ms ease, box-shadow 220ms ease",
     }),
     detailToggleLabel: {
         display: "inline-block",
@@ -620,7 +621,7 @@ export const styles = {
         backgroundRepeat: "no-repeat",
         backgroundPosition: "center",
         backgroundSize: "12px 12px",
-        transition: "transform 180ms ease",
+        transition: "transform 320ms cubic-bezier(0.22, 1, 0.36, 1)",
         opacity: 0.8,
     },
     handoffWarning: {
@@ -632,16 +633,27 @@ export const styles = {
         fontSize: 13,
         lineHeight: 1.45,
     },
-    detailPanel: (border, isClosing = false) => ({
+    detailPanelShell: (isExpanded) => ({
+        display: "grid",
+        gridTemplateRows: isExpanded ? "1fr" : "0fr",
+        opacity: isExpanded ? 1 : 0,
+        transform: isExpanded ? "translateY(0)" : "translateY(-8px)",
+        overflow: "hidden",
+        willChange: "grid-template-rows, opacity, transform",
+        transition:
+            "grid-template-rows 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, transform 320ms cubic-bezier(0.22, 1, 0.36, 1)",
+    }),
+    detailPanelClip: {
+        minHeight: 0,
+        overflow: "hidden",
+    },
+    detailPanel: (border) => ({
         border: `1px solid ${border}`,
         borderRadius: 14,
         padding: "10px 12px",
         background: "rgba(255,255,255,0.02)",
         display: "grid",
         gap: 10,
-        animation: isClosing
-            ? "detailClose 180ms ease forwards"
-            : "detailOpen 180ms ease",
     }),
     detailRow: {
         display: "grid",

@@ -25,6 +25,8 @@ const DEMO_FLAVOR = {
     },
 }
 
+const LIVE_BADGE_RETURN_MS = 560
+
 function clampValue(n, a, b) {
     return Math.max(a, Math.min(b, n))
 }
@@ -204,8 +206,39 @@ export default function DemoSelectorGallery({
 }) {
     const cards = React.useMemo(() => buildSelectorCards(config), [config])
     const [activeKey, setActiveKey] = React.useState(null)
+    const [returningKey, setReturningKey] = React.useState(null)
     const [lottieActiveKey, setLottieActiveKey] = React.useState(null)
     const [layout, setLayout] = React.useState(() => getLayout())
+    const liveBadgeReturnTimerRef = React.useRef(null)
+
+    const clearLiveBadgeReturnTimer = React.useCallback(() => {
+        if (liveBadgeReturnTimerRef.current !== null) {
+            window.clearTimeout(liveBadgeReturnTimerRef.current)
+            liveBadgeReturnTimerRef.current = null
+        }
+    }, [])
+
+    const beginLiveBadgeHover = React.useCallback(
+        (key) => {
+            clearLiveBadgeReturnTimer()
+            setReturningKey(null)
+            setActiveKey(key)
+        },
+        [clearLiveBadgeReturnTimer]
+    )
+
+    const endLiveBadgeHover = React.useCallback(
+        (key) => {
+            setActiveKey((current) => (current === key ? null : current))
+            clearLiveBadgeReturnTimer()
+            setReturningKey(key)
+            liveBadgeReturnTimerRef.current = window.setTimeout(() => {
+                setReturningKey((current) => (current === key ? null : current))
+                liveBadgeReturnTimerRef.current = null
+            }, LIVE_BADGE_RETURN_MS)
+        },
+        [clearLiveBadgeReturnTimer]
+    )
 
     React.useEffect(() => {
         const onResize = () => setLayout(getLayout())
@@ -220,6 +253,12 @@ export default function DemoSelectorGallery({
     }, [activeKey, cards])
 
     React.useEffect(() => {
+        if (returningKey && !cards.some((card) => card.key === returningKey)) {
+            setReturningKey(null)
+        }
+    }, [cards, returningKey])
+
+    React.useEffect(() => {
         if (
             lottieActiveKey &&
             !cards.some((card) => card.key === lottieActiveKey)
@@ -227,6 +266,13 @@ export default function DemoSelectorGallery({
             setLottieActiveKey(null)
         }
     }, [cards, lottieActiveKey])
+
+    React.useEffect(
+        () => () => {
+            clearLiveBadgeReturnTimer()
+        },
+        [clearLiveBadgeReturnTimer]
+    )
 
     return (
         <div className="selector-gallery">
@@ -254,6 +300,7 @@ export default function DemoSelectorGallery({
             >
                 {cards.map((card) => {
                     const isActive = activeKey === card.key
+                    const isReturning = returningKey === card.key
                     const isLottieActive = lottieActiveKey === card.key
                     const lottieScale = (card.lottieScale || 1) * 1.34
 
@@ -274,34 +321,26 @@ export default function DemoSelectorGallery({
                                 type="button"
                                 disabled={card.locked}
                                 aria-disabled={card.locked}
-                                className={`selector-card ${card.accentClass} ${card.locked ? "is-locked" : ""} ${isActive ? "is-active" : ""}`}
+                                className={`selector-card ${card.accentClass} ${card.locked ? "is-locked" : ""} ${isActive ? "is-active" : ""} ${isReturning ? "is-returning" : ""}`}
                                 onMouseEnter={() => {
                                     if (!card.locked) {
-                                        setActiveKey(card.key)
+                                        beginLiveBadgeHover(card.key)
                                     }
                                 }}
                                 onMouseLeave={() => {
                                     if (!card.locked) {
-                                        setActiveKey((current) =>
-                                            current === card.key
-                                                ? null
-                                                : current
-                                        )
+                                        endLiveBadgeHover(card.key)
                                     }
                                 }}
                                 onFocus={() => {
                                     if (!card.locked) {
-                                        setActiveKey(card.key)
+                                        beginLiveBadgeHover(card.key)
                                         setLottieActiveKey(card.key)
                                     }
                                 }}
                                 onBlur={() => {
                                     if (!card.locked) {
-                                        setActiveKey((current) =>
-                                            current === card.key
-                                                ? null
-                                                : current
-                                        )
+                                        endLiveBadgeHover(card.key)
                                         setLottieActiveKey((current) =>
                                             current === card.key
                                                 ? null

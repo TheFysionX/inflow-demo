@@ -7,11 +7,13 @@ import {
     useNavigate,
 } from "react-router-dom"
 import {
+    ACCESS_TERMS_PATH,
     CONSENT_SESSION_KEY,
     HOME_URL,
     chatConfig,
 } from "./config"
 import {
+    DEMO_GALLERY_PATH,
     getDemoKeyFromSlug,
     getDemoMeta,
 } from "./components/chat/demoCatalog"
@@ -21,9 +23,9 @@ import ConsentPage from "./pages/ConsentPage"
 import DemoChatPage from "./pages/DemoChatPage"
 import DemoSelectorPage from "./pages/DemoSelectorPage"
 
-function ProtectedRoute({ isConsented, children }) {
+function ProtectedRoute({ isConsented, redirectPath, children }) {
     if (!isConsented) {
-        return <Navigate to="/" replace />
+        return <Navigate to={redirectPath} replace />
     }
 
     return children
@@ -54,7 +56,7 @@ export default function App() {
     )
 
     const activeDemo = React.useMemo(() => {
-        const match = location.pathname.match(/^\/demo\/([^/]+)$/)
+        const match = location.pathname.match(/^\/(?:demos|demo)\/([^/]+)$/)
         if (!match) {
             return null
         }
@@ -64,6 +66,11 @@ export default function App() {
 
         return demoMeta?.locked ? null : demoMeta
     }, [location.pathname])
+    const isConsentRoute = location.pathname === ACCESS_TERMS_PATH
+    const isGalleryRoute =
+        location.pathname === DEMO_GALLERY_PATH ||
+        location.pathname === "/demo" ||
+        location.pathname === "/gallery"
 
     const handleProceed = React.useCallback(() => {
         try {
@@ -81,14 +88,37 @@ export default function App() {
 
         const timer = window.setTimeout(() => {
             setShowHelixIntro(false)
-            navigate("/demo")
+            navigate(DEMO_GALLERY_PATH)
         }, 2600)
 
         return () => window.clearTimeout(timer)
     }, [showHelixIntro, navigate])
 
+    React.useEffect(() => {
+        if (typeof document === "undefined") {
+            return
+        }
+
+        if (activeDemo?.title) {
+            document.title = `${activeDemo.title} Demo | Inflow AI`
+            return
+        }
+
+        if (isGalleryRoute) {
+            document.title = "Demo Gallery | Inflow AI"
+            return
+        }
+
+        if (isConsentRoute) {
+            document.title = "Access Terms | Inflow AI"
+            return
+        }
+
+        document.title = "Inflow AI"
+    }, [activeDemo?.title, isConsentRoute, isGalleryRoute])
+
     const handleResetToConsent = React.useCallback(() => {
-        navigate("/")
+        navigate(ACCESS_TERMS_PATH)
     }, [navigate])
 
     const handleHeaderResetChat = React.useCallback(() => {
@@ -96,7 +126,7 @@ export default function App() {
     }, [])
 
     const handleHeaderChangeDemo = React.useCallback(() => {
-        navigate("/demo")
+        navigate(DEMO_GALLERY_PATH)
     }, [navigate])
 
     return (
@@ -148,16 +178,38 @@ export default function App() {
                 </div>
             </header>
 
-            <main className="app-main">
+            <main
+                className={`app-main${isConsentRoute ? " app-main-consent" : ""}`}
+            >
                 <Routes>
                     <Route
                         path="/"
+                        element={
+                            <Navigate
+                                to={
+                                    isConsented
+                                        ? DEMO_GALLERY_PATH
+                                        : ACCESS_TERMS_PATH
+                                }
+                                replace
+                            />
+                        }
+                    />
+                    <Route
+                        path={ACCESS_TERMS_PATH}
                         element={<ConsentPage onProceed={handleProceed} />}
                     />
                     <Route
-                        path="/demo"
+                        path="/terms"
+                        element={<Navigate to={ACCESS_TERMS_PATH} replace />}
+                    />
+                    <Route
+                        path={DEMO_GALLERY_PATH}
                         element={
-                            <ProtectedRoute isConsented={isConsented}>
+                            <ProtectedRoute
+                                isConsented={isConsented}
+                                redirectPath={ACCESS_TERMS_PATH}
+                            >
                                 <DemoSelectorPage
                                     onResetToConsent={handleResetToConsent}
                                 />
@@ -165,9 +217,12 @@ export default function App() {
                         }
                     />
                     <Route
-                        path="/demo/:demoSlug"
+                        path={`${DEMO_GALLERY_PATH}/:demoSlug`}
                         element={
-                            <ProtectedRoute isConsented={isConsented}>
+                            <ProtectedRoute
+                                isConsented={isConsented}
+                                redirectPath={ACCESS_TERMS_PATH}
+                            >
                                 <DemoChatPage
                                     onResetToConsent={handleResetToConsent}
                                 />
@@ -175,10 +230,31 @@ export default function App() {
                         }
                     />
                     <Route
+                        path="/demo"
+                        element={<Navigate to={DEMO_GALLERY_PATH} replace />}
+                    />
+                    <Route
+                        path="/gallery"
+                        element={<Navigate to={DEMO_GALLERY_PATH} replace />}
+                    />
+                    <Route
+                        path="/demo/:demoSlug"
+                        element={
+                            <Navigate
+                                to={`${DEMO_GALLERY_PATH}/${location.pathname.split("/").pop()}`}
+                                replace
+                            />
+                        }
+                    />
+                    <Route
                         path="*"
                         element={
                             <Navigate
-                                to={isConsented ? "/demo" : "/"}
+                                to={
+                                    isConsented
+                                        ? DEMO_GALLERY_PATH
+                                        : ACCESS_TERMS_PATH
+                                }
                                 replace
                             />
                         }

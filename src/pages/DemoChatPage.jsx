@@ -2,6 +2,7 @@ import * as React from "react"
 import { Navigate, useNavigate, useParams } from "react-router-dom"
 import { chatConfig } from "../config"
 import {
+    DEMO_GALLERY_PATH,
     getDemoKeyFromSlug,
     getDemoMeta,
 } from "../components/chat/demoCatalog"
@@ -15,7 +16,7 @@ export default function DemoChatPage({ onResetToConsent }) {
     const demoMeta = demoKey ? getDemoMeta(demoKey) : null
 
     if (!demoKey || demoMeta?.locked) {
-        return <Navigate to="/demo" replace />
+        return <Navigate to={DEMO_GALLERY_PATH} replace />
     }
 
     return (
@@ -31,7 +32,7 @@ export default function DemoChatPage({ onResetToConsent }) {
                     <InflowChatDemo
                         {...chatConfig}
                         demoKey={demoKey}
-                        onExitChat={() => navigate("/demo")}
+                        onExitChat={() => navigate(DEMO_GALLERY_PATH)}
                         onResetToConsent={onResetToConsent}
                     />
                 </React.Suspense>

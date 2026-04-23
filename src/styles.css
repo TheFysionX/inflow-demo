@@ -42,6 +42,8 @@ a {
 }
 
 .app-shell {
+    --app-shell-pad-x: 22px;
+    --app-shell-pad-bottom: 22px;
     height: 100dvh;
     min-height: 0;
     display: flex;
@@ -165,6 +167,13 @@ a {
     overflow: hidden;
 }
 
+.app-main.app-main-consent {
+    width: calc(100% + (var(--app-shell-pad-x) * 2));
+    margin-right: calc(var(--app-shell-pad-x) * -1);
+    margin-bottom: calc(var(--app-shell-pad-bottom) * -1);
+    margin-left: calc(var(--app-shell-pad-x) * -1);
+}
+
 .consent-shell,
 .chat-shell {
     flex: 1;
@@ -174,11 +183,22 @@ a {
 }
 
 .consent-shell {
-    align-items: flex-start;
+    padding-right: var(--app-shell-pad-x);
+    padding-left: var(--app-shell-pad-x);
+    align-items: stretch;
     position: relative;
     isolation: isolate;
-    overflow: auto;
-    padding-top: clamp(10px, 3vh, 34px);
+    overflow: hidden;
+}
+
+.consent-scroll {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: clamp(10px, 3vh, 34px) 0 18px;
+    scrollbar-gutter: stable;
 }
 
 .consent-shell::before,
@@ -255,6 +275,7 @@ a {
 
 .consent-card {
     width: min(100%, 1360px);
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 28px;
@@ -773,6 +794,8 @@ a {
 
 @media (max-width: 720px) {
     .app-shell {
+        --app-shell-pad-x: 14px;
+        --app-shell-pad-bottom: 18px;
         padding: 14px 14px 18px;
     }
 

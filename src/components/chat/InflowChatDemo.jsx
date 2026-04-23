@@ -482,6 +482,7 @@ export default function InflowChatDemo(props) {
     const inputRef = React.useRef(null);
     const sendingRef = React.useRef(false);
     const abortReasonRef = React.useRef(null);
+    const scrollAnimationFrameRef = React.useRef(0);
     // timers/cancel tokens
     const thinkingTimersRef = React.useRef([]);
     const thinkingVariantTimersRef = React.useRef([]);
@@ -817,10 +818,17 @@ export default function InflowChatDemo(props) {
         setIsThinking(false);
         setIsTyping(false);
     }, [clearThinkingSequence]);
+    const cancelScrollAnimation = React.useCallback(() => {
+        if (scrollAnimationFrameRef.current) {
+            window.cancelAnimationFrame(scrollAnimationFrameRef.current);
+            scrollAnimationFrameRef.current = 0;
+        }
+    }, []);
     const scrollToBottom = React.useCallback((behavior = "auto") => {
         const el = scrollerRef.current;
         if (!el)
             return;
+        cancelScrollAnimation();
         if (typeof el.scrollTo === "function") {
             el.scrollTo({
                 top: el.scrollHeight,
@@ -829,13 +837,42 @@ export default function InflowChatDemo(props) {
             return;
         }
         el.scrollTop = el.scrollHeight;
-    }, []);
-    const keepComposerInView = React.useCallback(() => {
-        scrollToBottom("smooth");
-        window.setTimeout(() => {
-            scrollToBottom("auto");
-        }, 220);
-    }, [scrollToBottom]);
+    }, [cancelScrollAnimation]);
+    const animateScrollToBottom = React.useCallback((durationMs = 320) => {
+        const el = scrollerRef.current;
+        if (!el) {
+            return;
+        }
+        cancelScrollAnimation();
+        const startTop = el.scrollTop;
+        const startTime = window.performance.now();
+        const step = (now) => {
+            const progress = Math.min((now - startTime) / durationMs, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            const targetTop = Math.max(0, el.scrollHeight - el.clientHeight);
+            el.scrollTop = startTop + (targetTop - startTop) * eased;
+            if (progress < 1) {
+                scrollAnimationFrameRef.current =
+                    window.requestAnimationFrame(step);
+                return;
+            }
+            el.scrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
+            scrollAnimationFrameRef.current = 0;
+        };
+        scrollAnimationFrameRef.current = window.requestAnimationFrame(step);
+    }, [cancelScrollAnimation]);
+    const keepComposerInView = React.useCallback((_isExpanded, durationMs = 320) => {
+        const el = scrollerRef.current;
+        if (!el) {
+            return;
+        }
+        const distanceFromBottom =
+            el.scrollHeight - el.scrollTop - el.clientHeight;
+        if (distanceFromBottom > 160) {
+            return;
+        }
+        animateScrollToBottom(durationMs);
+    }, [animateScrollToBottom]);
     const normalizeId = React.useCallback((v) => {
         const trimmed = (v || "").trim();
         return trimmed || undefined;
@@ -863,6 +900,9 @@ export default function InflowChatDemo(props) {
     React.useEffect(() => {
         threadClosedRef.current = threadClosed
     }, [threadClosed]);
+    React.useEffect(() => () => {
+        cancelScrollAnimation();
+    }, [cancelScrollAnimation]);
     const flushAnalyticsEvents = React.useCallback((options = {}) => {
         if (analyticsFlushTimerRef.current) {
             window.clearTimeout(analyticsFlushTimerRef.current)
@@ -1851,7 +1891,7 @@ export default function InflowChatDemo(props) {
                                     <MessageBubble msg={m} border={C.border} radius={radius} text={C.text} muted={C.muted} avatarSize={avatarSize} accent={C.accent} assistantAvatarUrl={assistantAvatarUrl || watermarkImageUrl} scale={C.scale} devTestEnabled={devTestEnabled} onRetry={() => {
                     if (demo)
                         resetConversation(demo);
-                }} onDetailsExpand={keepComposerInView}/>
+                }} onDetailsToggle={keepComposerInView}/>
                                 </React.Fragment>);
         })}
 

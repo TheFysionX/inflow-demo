@@ -171,13 +171,13 @@ export function MessageBubble(props) {
         scale,
         devTestEnabled,
         onRetry,
-        onDetailsExpand,
+        onDetailsToggle,
     } = props
     const isUser = msg.role === "user"
     const isSystem = msg.role === "system"
     const [showDetails, setShowDetails] = React.useState(false)
     const [detailsVisible, setDetailsVisible] = React.useState(false)
-    const [detailsClosing, setDetailsClosing] = React.useState(false)
+    const [detailsExpanded, setDetailsExpanded] = React.useState(false)
     const isHandoff = !!msg.meta?.filled?.needs_handoff
     const qualificationSignal = msg.meta?.filled?.qualification_signal
     const qualificationTone =
@@ -190,11 +190,11 @@ export function MessageBubble(props) {
         () => buildDetailSummary(msg.meta),
         [msg.meta]
     )
+    const detailTransitionMs = 320
 
     React.useEffect(() => {
         if (showDetails) {
             setDetailsVisible(true)
-            setDetailsClosing(false)
             return
         }
 
@@ -202,31 +202,56 @@ export function MessageBubble(props) {
             return
         }
 
-        setDetailsClosing(true)
         const timer = window.setTimeout(() => {
             setDetailsVisible(false)
-            setDetailsClosing(false)
-        }, 180)
+        }, detailTransitionMs)
 
         return () => window.clearTimeout(timer)
-    }, [detailsVisible, showDetails])
+    }, [detailTransitionMs, detailsVisible, showDetails])
+
     React.useEffect(() => {
-        if (!showDetails || !detailsVisible || typeof onDetailsExpand !== "function") {
+        if (!detailsVisible) {
+            setDetailsExpanded(false)
+            return
+        }
+
+        if (!showDetails) {
+            setDetailsExpanded(false)
             return
         }
 
         const frameId = window.requestAnimationFrame(() => {
-            onDetailsExpand()
+            setDetailsExpanded(true)
         })
-        const timer = window.setTimeout(() => {
-            onDetailsExpand()
-        }, 220)
 
         return () => {
             window.cancelAnimationFrame(frameId)
-            window.clearTimeout(timer)
         }
-    }, [detailsVisible, onDetailsExpand, showDetails])
+    }, [detailsVisible, showDetails])
+
+    React.useEffect(() => {
+        if (
+            !detailsVisible ||
+            showDetails !== detailsExpanded ||
+            typeof onDetailsToggle !== "function"
+        ) {
+            return
+        }
+
+        const frameId = window.requestAnimationFrame(() => {
+            onDetailsToggle(detailsExpanded, detailTransitionMs)
+        })
+
+        return () => {
+            window.cancelAnimationFrame(frameId)
+        }
+    }, [
+        detailTransitionMs,
+        detailsExpanded,
+        detailsVisible,
+        onDetailsToggle,
+        showDetails,
+    ])
 
     const renderSystem = (t) => {
         const parts = t.split(/(\*\*[^*]+\*\*)/g)
@@ -322,162 +347,247 @@ export function MessageBubble(props) {
                         )}
                         {detailsVisible && (
                             <div
-                                style={styles.detailPanel(
-                                    border,
-                                    detailsClosing
+                                style={styles.detailPanelShell(
+                                    detailsExpanded
                                 )}
                             >
-                                {detailSummary.statusLabel && (
-                                    <div style={styles.detailRow}>
-                                        <div style={styles.detailLabel}>
-                                            Status
+                                <div style={styles.detailPanelClip}>
+                                    <div style={styles.detailPanel(border)}>
+                                        {detailSummary.statusLabel && (
+                                            <div style={styles.detailRow}>
+                                                <div
+                                                    style={styles.detailLabel}
+                                                >
+                                                    Status
+                                                </div>
+                                                <div
+                                                    style={styles.detailValue}
+                                                >
+                                                    {detailSummary.statusLabel}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {detailSummary.traceId && (
+                                            <div style={styles.detailRow}>
+                                                <div
+                                                    style={styles.detailLabel}
+                                                >
+                                                    Trace ID
+                                                </div>
+                                                <div
+                                                    style={
+                                                        styles.detailMonoValue
+                                                    }
+                                                >
+                                                    {detailSummary.traceId}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {detailSummary.referencedDocCount > 0 && (
+                                            <div style={styles.detailRow}>
+                                                <div
+                                                    style={styles.detailLabel}
+                                                >
+                                                    Referenced Docs
+                                                </div>
+                                                <div
+                                                    style={styles.detailValue}
+                                                >
+                                                    {
+                                                        detailSummary.referencedDocCount
+                                                    }
+                                                </div>
+                                            </div>
+                                        )}
+                                        {detailSummary.pathLabel && (
+                                            <div style={styles.detailRow}>
+                                                <div
+                                                    style={styles.detailLabel}
+                                                >
+                                                    Path
+                                                </div>
+                                                <div
+                                                    style={styles.detailValue}
+                                                >
+                                                    {detailSummary.pathLabel}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {detailSummary.nextFocusLabel && (
+                                            <div style={styles.detailRow}>
+                                                <div
+                                                    style={styles.detailLabel}
+                                                >
+                                                    Next Step
+                                                </div>
+                                                <div
+                                                    style={styles.detailValue}
+                                                >
+                                                    {
+                                                        detailSummary.nextFocusLabel
+                                                    }
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div style={styles.detailRow}>
+                                            <div style={styles.detailLabel}>
+                                                Signal
+                                            </div>
+                                            <div style={styles.detailValue}>
+                                                <span
+                                                    style={styles.qualSquare(
+                                                        qualificationTone
+                                                    )}
+                                                    title={`Qualification: ${qualificationTone}`}
+                                                />
+                                                <span
+                                                    style={{ marginLeft: 8 }}
+                                                >
+                                                    {detailSummary.signalLabel}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div style={styles.detailValue}>
-                                            {detailSummary.statusLabel}
-                                        </div>
-                                    </div>
-                                )}
-                                {detailSummary.traceId && (
-                                    <div style={styles.detailRow}>
-                                        <div style={styles.detailLabel}>
-                                            Trace ID
-                                        </div>
-                                        <div style={styles.detailMonoValue}>
-                                            {detailSummary.traceId}
-                                        </div>
-                                    </div>
-                                )}
-                                {detailSummary.referencedDocCount > 0 && (
-                                    <div style={styles.detailRow}>
-                                        <div style={styles.detailLabel}>
-                                            Referenced Docs
-                                        </div>
-                                        <div style={styles.detailValue}>
-                                            {detailSummary.referencedDocCount}
-                                        </div>
-                                    </div>
-                                )}
-                                {detailSummary.pathLabel && (
-                                    <div style={styles.detailRow}>
-                                        <div style={styles.detailLabel}>
-                                            Path
-                                        </div>
-                                        <div style={styles.detailValue}>
-                                            {detailSummary.pathLabel}
-                                        </div>
-                                    </div>
-                                )}
-                                {detailSummary.nextFocusLabel && (
-                                    <div style={styles.detailRow}>
-                                        <div style={styles.detailLabel}>
-                                            Next Step
-                                        </div>
-                                        <div style={styles.detailValue}>
-                                            {detailSummary.nextFocusLabel}
-                                        </div>
-                                    </div>
-                                )}
-                                <div style={styles.detailRow}>
-                                    <div style={styles.detailLabel}>
-                                        Signal
-                                    </div>
-                                    <div style={styles.detailValue}>
-                                        <span
-                                            style={styles.qualSquare(
-                                                qualificationTone
-                                            )}
-                                            title={`Qualification: ${qualificationTone}`}
-                                        />
-                                        <span style={{ marginLeft: 8 }}>
-                                            {detailSummary.signalLabel}
-                                        </span>
+                                        {detailSummary.confidenceLabel && (
+                                            <div style={styles.detailRow}>
+                                                <div
+                                                    style={styles.detailLabel}
+                                                >
+                                                    Confidence
+                                                </div>
+                                                <div
+                                                    style={styles.detailValue}
+                                                >
+                                                    {
+                                                        detailSummary.confidenceLabel
+                                                    }
+                                                </div>
+                                            </div>
+                                        )}
+                                        {detailSummary.threadLabel && (
+                                            <div style={styles.detailRow}>
+                                                <div
+                                                    style={styles.detailLabel}
+                                                >
+                                                    Thread
+                                                </div>
+                                                <div
+                                                    style={styles.detailValue}
+                                                >
+                                                    {detailSummary.threadLabel}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {detailSummary.bookingLabel && (
+                                            <div style={styles.detailRow}>
+                                                <div
+                                                    style={styles.detailLabel}
+                                                >
+                                                    Booking
+                                                </div>
+                                                <div
+                                                    style={styles.detailValue}
+                                                >
+                                                    {detailSummary.bookingLabel}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {detailSummary.noteLabel && (
+                                            <div style={styles.detailRow}>
+                                                <div
+                                                    style={styles.detailLabel}
+                                                >
+                                                    Note
+                                                </div>
+                                                <div
+                                                    style={styles.detailValue}
+                                                >
+                                                    {detailSummary.noteLabel}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {devTestEnabled && (
+                                            <>
+                                                <div
+                                                    style={styles.detailRow}
+                                                >
+                                                    <div
+                                                        style={
+                                                            styles.detailLabel
+                                                        }
+                                                    >
+                                                        Tenant ID
+                                                    </div>
+                                                    <div
+                                                        style={
+                                                            styles.detailMonoValue
+                                                        }
+                                                    >
+                                                        {msg.debug?.tenant_id ||
+                                                            "n/a"}
+                                                    </div>
+                                                </div>
+                                                <div
+                                                    style={styles.detailRow}
+                                                >
+                                                    <div
+                                                        style={
+                                                            styles.detailLabel
+                                                        }
+                                                    >
+                                                        Lead ID
+                                                    </div>
+                                                    <div
+                                                        style={
+                                                            styles.detailMonoValue
+                                                        }
+                                                    >
+                                                        {msg.debug?.lead_id ||
+                                                            "n/a"}
+                                                    </div>
+                                                </div>
+                                                <div
+                                                    style={styles.detailRow}
+                                                >
+                                                    <div
+                                                        style={
+                                                            styles.detailLabel
+                                                        }
+                                                    >
+                                                        Conversation ID
+                                                    </div>
+                                                    <div
+                                                        style={
+                                                            styles.detailMonoValue
+                                                        }
+                                                    >
+                                                        {msg.debug
+                                                            ?.conversation_id ||
+                                                            "n/a"}
+                                                    </div>
+                                                </div>
+                                                <div
+                                                    style={styles.detailRow}
+                                                >
+                                                    <div
+                                                        style={
+                                                            styles.detailLabel
+                                                        }
+                                                    >
+                                                        Run ID
+                                                    </div>
+                                                    <div
+                                                        style={
+                                                            styles.detailMonoValue
+                                                        }
+                                                    >
+                                                        {msg.debug?.run_id ||
+                                                            "n/a"}
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
-                                {detailSummary.confidenceLabel && (
-                                    <div style={styles.detailRow}>
-                                        <div style={styles.detailLabel}>
-                                            Confidence
-                                        </div>
-                                        <div style={styles.detailValue}>
-                                            {detailSummary.confidenceLabel}
-                                        </div>
-                                    </div>
-                                )}
-                                {detailSummary.threadLabel && (
-                                    <div style={styles.detailRow}>
-                                        <div style={styles.detailLabel}>
-                                            Thread
-                                        </div>
-                                        <div style={styles.detailValue}>
-                                            {detailSummary.threadLabel}
-                                        </div>
-                                    </div>
-                                )}
-                                {detailSummary.bookingLabel && (
-                                    <div style={styles.detailRow}>
-                                        <div style={styles.detailLabel}>
-                                            Booking
-                                        </div>
-                                        <div style={styles.detailValue}>
-                                            {detailSummary.bookingLabel}
-                                        </div>
-                                    </div>
-                                )}
-                                {detailSummary.noteLabel && (
-                                    <div style={styles.detailRow}>
-                                        <div style={styles.detailLabel}>
-                                            Note
-                                        </div>
-                                        <div style={styles.detailValue}>
-                                            {detailSummary.noteLabel}
-                                        </div>
-                                    </div>
-                                )}
-                                {devTestEnabled && (
-                                    <>
-                                        <div style={styles.detailRow}>
-                                            <div style={styles.detailLabel}>
-                                                Tenant ID
-                                            </div>
-                                            <div
-                                                style={styles.detailMonoValue}
-                                            >
-                                                {msg.debug?.tenant_id || "n/a"}
-                                            </div>
-                                        </div>
-                                        <div style={styles.detailRow}>
-                                            <div style={styles.detailLabel}>
-                                                Lead ID
-                                            </div>
-                                            <div
-                                                style={styles.detailMonoValue}
-                                            >
-                                                {msg.debug?.lead_id || "n/a"}
-                                            </div>
-                                        </div>
-                                        <div style={styles.detailRow}>
-                                            <div style={styles.detailLabel}>
-                                                Conversation ID
-                                            </div>
-                                            <div
-                                                style={styles.detailMonoValue}
-                                            >
-                                                {msg.debug?.conversation_id ||
-                                                    "n/a"}
-                                            </div>
-                                        </div>
-                                        <div style={styles.detailRow}>
-                                            <div style={styles.detailLabel}>
-                                                Run ID
-                                            </div>
-                                            <div
-                                                style={styles.detailMonoValue}
-                                            >
-                                                {msg.debug?.run_id || "n/a"}
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
                             </div>
                         )}
                     </div>
