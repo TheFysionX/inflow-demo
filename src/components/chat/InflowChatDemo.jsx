@@ -1753,6 +1753,13 @@ export default function InflowChatDemo(props) {
             return filled.call_time;
         return "";
     }, [lastAssistantMeta]);
+    const hasBookedOutcome = React.useMemo(() => {
+        const filled = lastAssistantMeta?.filled;
+        if (!filled)
+            return false;
+        return Boolean(filled.booked_time || filled.confirmed_time);
+    }, [lastAssistantMeta]);
+    const showOutcomeContact = threadClosed && hasBookedOutcome;
     if (!demo) {
         return (<div className="inflowChatDemoRoot" style={styles.root(outerPadding, C.fontFamily)} onKeyDownCapture={stopCapture} onKeyUpCapture={stopCapture}>
                 <StyleTag />
@@ -1944,14 +1951,16 @@ export default function InflowChatDemo(props) {
                                     </div>
                                     <div style={styles.outcomeBody(C.scale)}>
                                         {lastQualSignal === "unqualified"
-                ? "The AI analyzed this user as not being qualified right now. If you'd like a personalized demo, contact us."
+                ? "The AI analyzed this user as not being qualified right now."
                 : lastQualSignal === "qualified"
                     ? `The AI marked this user as qualified.${outcomeTime
                         ? ` Scheduled time: ${outcomeTime}.`
-                        : ""} If you'd like a personalized demo, contact us.`
-                    : "This conversation has ended. If you'd like a personalized demo, contact us."}
+                        : ""}${showOutcomeContact
+                        ? " If you'd like a personalized demo, contact us."
+                        : ""}`
+                    : "This conversation has ended."}
                                     </div>
-                                    <a href={contactHref ||
+                                    {showOutcomeContact && (<a href={contactHref ||
                 "https://inflowai.net/#contact-us"} style={styles.outcomeBtn(lastQualSignal, C.scale)} onClick={() => {
                 enqueueAnalyticsEvent("contact_clicked", {
                     target: lastQualSignal,
@@ -1959,7 +1968,7 @@ export default function InflowChatDemo(props) {
                 void flushAnalyticsEvents({ useBeacon: true });
             }}>
                                         Contact us
-                                    </a>
+                                    </a>)}
                                 </div>
                             </div>)}
                     </div>
