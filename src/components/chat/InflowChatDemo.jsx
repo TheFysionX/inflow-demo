@@ -549,7 +549,7 @@ export default function InflowChatDemo(props) {
         day_trading: {
             title: "Day Trading",
             subtitle: "DM-style qualifier + next-step framing",
-            intro: "This is a **demo conversation**. Responses are generated from pre-filled example parameters to showcase flow, tone, and structure — not real trading advice.",
+            intro: "This is a **demo conversation** built around a sample day trading course and the information this assistant is meant to collect. To get the clearest feel for the AI's behavior, role-play as a realistic prospective customer and test different situations.",
             canned: [
                 {
                     reply: "Bet, appreciate you tapping in. What are you trying to get out of trading right now?",
@@ -587,7 +587,7 @@ export default function InflowChatDemo(props) {
         fitness_health: {
             title: "Fitness / Health",
             subtitle: "Simple intake → tailored next question",
-            intro: "This is a **demo conversation**. Responses are mocked to demonstrate how the assistant collects goals, constraints, and adherence signals — not medical advice.",
+            intro: "This is a **demo conversation** built around a sample fitness coaching offer and the information this assistant is meant to collect. To get the clearest feel for the AI's behavior, role-play as a realistic prospective customer and test different situations.",
             canned: [
                 {
                     reply: "Alright — what’s the main goal right now: fat loss, muscle gain, or just feeling better day-to-day?",
@@ -612,7 +612,7 @@ export default function InflowChatDemo(props) {
         self_improvement: {
             title: "Self-Improvement",
             subtitle: "Clarity → leverage point → plan",
-            intro: "This is a **demo conversation**. Responses are mocked to show how the assistant narrows intent, identifies friction, and proposes a simple plan.",
+            intro: "This is a **demo conversation** built around a sample self-improvement coaching offer and the information this assistant is meant to collect. To get the clearest feel for the AI's behavior, role-play as a realistic prospective customer and test different situations.",
             canned: [
                 {
                     reply: "Real question — what are you trying to change first: discipline, confidence, focus, or consistency?",

@@ -15,7 +15,7 @@ export const DEMO_CATALOG = {
         selectorDesc:
             "Qualification, rapport, and pain-point discovery.",
         subtitle: "DM-style qualifier + next-step framing",
-        intro: "This is a **demo conversation**. Responses are generated from pre-filled example parameters to showcase flow, tone, and structure - not real trading advice.",
+        intro: "This is a **demo conversation** built around a sample day trading course and the information this assistant is meant to collect. To get the clearest feel for the AI's behavior, role-play as a realistic prospective customer and test different situations.",
         lottieSrcKey: "dayTradingLottieUrl",
         lottieScaleKey: "dayTradingLottieScale",
         canned: [
@@ -61,7 +61,7 @@ export const DEMO_CATALOG = {
         selectorLabel: "Fitness / Health",
         selectorDesc: "Goal capture and tailored follow-up.",
         subtitle: "Goal intake and next-step routing",
-        intro: "This is a **demo conversation**. Responses are mocked to demonstrate how the assistant collects goals, constraints, and adherence signals - not medical advice.",
+        intro: "This is a **demo conversation** built around a sample fitness coaching offer and the information this assistant is meant to collect. To get the clearest feel for the AI's behavior, role-play as a realistic prospective customer and test different situations.",
         lottieSrcKey: "fitnessLottieUrl",
         lottieScaleKey: "fitnessLottieScale",
         canned: [
@@ -92,7 +92,7 @@ export const DEMO_CATALOG = {
         selectorLabel: "Self-Improvement",
         selectorDesc: "Intent clarity, friction, and next-step planning.",
         subtitle: "Clarify the issue, then define the next step",
-        intro: "This is a **demo conversation**. Responses are mocked to show how the assistant narrows intent, identifies friction, and proposes a simple plan.",
+        intro: "This is a **demo conversation** built around a sample self-improvement coaching offer and the information this assistant is meant to collect. To get the clearest feel for the AI's behavior, role-play as a realistic prospective customer and test different situations.",
         lottieSrcKey: "selfImprovementLottieUrl",
         lottieScaleKey: "selfImprovementLottieScale",
         canned: [
