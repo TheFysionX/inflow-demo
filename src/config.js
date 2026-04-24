@@ -33,5 +33,5 @@ export const chatConfig = {
     textScale: 1.1,
     starter1: "Hey man, saw your videos on Daytrading and I've wanted to get into that",
     starter2: "It said to DM you TRADE on one of your ig videos",
-    starter3: "Can trading really make me a full time income?",
+    starter3: "I wanna make a lot of money",
 };
